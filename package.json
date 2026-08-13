@@ -1,0 +1,140 @@
+{
+  "name": "vizier",
+  "displayName": "Vizier",
+  "description": "Turn app ideas into structured, agent-ready build plans",
+  "version": "0.1.0",
+  "publisher": "vizier",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vizier-dev/vizier"
+  },
+  "bugs": {
+    "url": "https://github.com/vizier-dev/vizier/issues"
+  },
+  "homepage": "https://github.com/vizier-dev/vizier#readme",
+  "galleryBanner": {
+    "color": "#1f2a44",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "ai planning",
+    "planning",
+    "AI",
+    "specification",
+    "cursor",
+    "claude"
+  ],
+  "activationEvents": [
+    "onCommand:vizier.planNewApp",
+    "onCommand:vizier.openSidebar",
+    "onCommand:vizier.exportPlan"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vizier.planNewApp",
+        "title": "Plan New App",
+        "category": "Vizier",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "vizier.openSidebar",
+        "title": "Open Planner Sidebar",
+        "category": "Vizier",
+        "icon": "$(layout-sidebar-left)"
+      },
+      {
+        "command": "vizier.exportPlan",
+        "title": "Export Plan to Files",
+        "category": "Vizier",
+        "icon": "$(export)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vizier",
+          "title": "Vizier",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "views": {
+      "vizier": [
+        {
+          "type": "webview",
+          "id": "vizier.sidebar",
+          "name": "Planner",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Vizier",
+      "properties": {
+        "vizier.anthropicApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Your Anthropic API key for Claude"
+        },
+        "vizier.preferredModel": {
+          "type": "string",
+          "default": "claude-sonnet-4-20250514",
+          "enum": [
+            "claude-sonnet-4-20250514",
+            "claude-3-5-sonnet-20241022"
+          ],
+          "description": "Which Claude model to use"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run clean && npm run build:all",
+    "clean": "rimraf dist",
+    "build:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18",
+    "build:webview": "node scripts/build-webview.js",
+    "build:all": "npm-run-all --parallel build:extension build:webview",
+    "watch:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --watch",
+    "watch:webview": "node scripts/build-webview.js --watch",
+    "watch:all": "npm-run-all --parallel watch:extension watch:webview",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
+    "test": "tsx --test test/unit/*.test.ts",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "uuid": "^9.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/uuid": "^9.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "@xyflow/react": "^12.0.0",
+    "autoprefixer": "^10.4.0",
+    "esbuild": "^0.20.0",
+    "npm-run-all": "^4.1.5",
+    "postcss": "^8.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "rimraf": "^5.0.0",
+    "tailwindcss": "^3.4.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.3.0"
+  }
+}
