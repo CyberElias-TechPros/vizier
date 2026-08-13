@@ -3,7 +3,7 @@
   "displayName": "Vizier",
   "description": "Turn app ideas into structured, agent-ready build plans",
   "version": "0.1.0",
-  "publisher": "vizier",
+  "publisher": "cyberelias",
   "license": "MIT",
   "icon": "icon.png",
   "repository": {

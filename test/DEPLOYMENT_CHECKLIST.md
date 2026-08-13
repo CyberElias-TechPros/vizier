@@ -10,7 +10,7 @@
    - Note your publisher ID
 
 2. **Update package.json:**
-   - Replace the placeholder `publisher` value (`"vizier"`) with your real Publisher ID
+   - The `publisher` value is set to `cyberelias` — replace with your real Publisher ID if different
    - Keep `license: "MIT"`, `icon: "icon.png"`, `repository`, `bugs`, `homepage` as-is (or point to your repo)
 
 3. **Get an Azure DevOps Access Token:**
