@@ -246,7 +246,7 @@ export function App() {
           )}
         </div>
         <div style={{ flex: 1, overflow: "hidden" }}>
-          <BlueprintView product={blueprint.product} architecture={blueprint.architecture} entities={blueprint.entities} tasks={blueprint.tasks} apiContract={blueprint.api_contract} />
+          <BlueprintView product={blueprint.product} architecture={blueprint.architecture} entities={blueprint.entities} tasks={blueprint.tasks} apiContract={blueprint.api_contract} perspectives={blueprint.perspectives} />
         </div>
       </div>
     );

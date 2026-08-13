@@ -1,9 +1,10 @@
 ﻿import * as vscode from "vscode";
 import Anthropic from "@anthropic-ai/sdk";
-import { Project, Product, Architecture, Entity, Task, Decision, Rule, Requirement, ApiContract, RepoContext } from "../types/pim";
+import { Project, Product, Architecture, Entity, Task, Decision, Rule, Requirement, ApiContract, RepoContext, Perspective } from "../types/pim";
 import { PRD_PROMPT, ARCHITECTURE_PROMPT, SCHEMA_PROMPT, API_CONTRACT_PROMPT, TASKS_PROMPT, DECISIONS_PROMPT } from "../llm/prompts";
 import { parseAndValidate, ValidationError, ValidationStage } from "../llm/schemas";
 import { augmentWithTestingTasks } from "./taskAugment";
+import { parseSelectedPerspectives, getLens, PerspectiveContext } from "./perspectives";
 
 let client: Anthropic | null = null;
 
@@ -31,9 +32,13 @@ export async function generateBlueprint(
   onUsage?: (usage: { input: number; output: number }) => void
 ): Promise<Project> {
   const now = new Date().toISOString();
-  const TOTAL = 6;
+  const perspectiveIds = parseSelectedPerspectives(answers);
+  const TOTAL = 6 + perspectiveIds.length;
 
-  onProgress(1, TOTAL, "Generating product requirements...");
+  let step = 0;
+  const advance = (label: string) => onProgress(++step, TOTAL, label);
+
+  advance("Generating product requirements...");
   const prd = await callLLM(PRD_PROMPT, { idea, category, answers, repoContext }, "prd", signal, onUsage);
   const product: Product = {
     vision: prd.vision,
@@ -43,7 +48,7 @@ export async function generateBlueprint(
     core_workflows: prd.core_workflows
   };
 
-  onProgress(2, TOTAL, "Selecting tech stack...");
+  advance("Selecting tech stack...");
   const arch = await callLLM(ARCHITECTURE_PROMPT, { idea, category, prd, answers, repoContext }, "architecture", signal, onUsage);
   const architecture: Architecture = {
     frontend: arch.frontend,
@@ -55,18 +60,18 @@ export async function generateBlueprint(
     rationale: arch.rationale
   };
 
-  onProgress(3, TOTAL, "Designing data model...");
+  advance("Designing data model...");
   const schema = await callLLM(SCHEMA_PROMPT, { prd, architecture }, "schema", signal, onUsage);
   const entities: Entity[] = schema.entities || [];
 
-  onProgress(4, TOTAL, "Designing API contracts...");
+  advance("Designing API contracts...");
   const apiResult = await callLLM(API_CONTRACT_PROMPT, { prd, architecture, entities }, "api", signal, onUsage);
   const api_contract: ApiContract = {
     endpoints: apiResult.endpoints || [],
     notes: apiResult.notes || ""
   };
 
-  onProgress(5, TOTAL, "Building task graph...");
+  advance("Building task graph...");
   const tasksResult = await callLLM(TASKS_PROMPT, { prd, architecture, entities, api_contract, repoContext }, "tasks", signal, onUsage);
   const baseTasks: Task[] = (tasksResult.tasks || []).map((t: any) => ({
     id: t.id,
@@ -85,7 +90,7 @@ export async function generateBlueprint(
 
   const tasks: Task[] = augmentWithTestingTasks(baseTasks, entities, api_contract);
 
-  onProgress(6, TOTAL, "Documenting decisions...");
+  advance("Documenting decisions...");
   const decisionsResult = await callLLM(DECISIONS_PROMPT, { architecture, entities }, "decisions", signal, onUsage);
   const decisions: Decision[] = (decisionsResult.decisions || []).map((d: any) => ({
     id: d.id,
@@ -96,6 +101,51 @@ export async function generateBlueprint(
     impacts: d.impacts || [],
     status: "approved" as const
   }));
+
+  const perspectives: Record<string, Perspective> = {};
+  if (perspectiveIds.length > 0) {
+    const ctx: PerspectiveContext = {
+      idea,
+      category,
+      product: {
+        vision: product.vision,
+        target_audience: product.target_audience,
+        mvp_scope: product.mvp_scope
+      },
+      architecture: architecture
+        ? {
+            frontend: architecture.frontend,
+            backend: architecture.backend,
+            database: architecture.database,
+            auth: architecture.auth,
+            infrastructure: architecture.infrastructure
+          }
+        : null,
+      tasks: tasks.map((t) => ({ id: t.id, title: t.title })),
+      decisions: decisions.map((d) => ({ topic: d.topic }))
+    };
+
+    for (const id of perspectiveIds) {
+      const lens = getLens(id);
+      if (!lens) continue;
+      advance(`Generating ${lens.label} perspective...`);
+      const tpl = {
+        system: lens.system,
+        userTemplate: (c: PerspectiveContext) => lens.buildPrompt(c),
+        temperature: 0.6,
+        maxTokens: 1400
+      };
+      const res = await callLLM(tpl, ctx, "perspective", signal, onUsage);
+      perspectives[id] = {
+        roleId: lens.roleId,
+        label: lens.label,
+        summary: res.summary || "",
+        recommendations: res.recommendations || [],
+        risks: res.risks || [],
+        open_questions: res.open_questions || []
+      };
+    }
+  }
 
   const project: Project = {
     schemaVersion: "1.0.0",
@@ -114,6 +164,7 @@ export async function generateBlueprint(
     decisions,
     rules: extractRules(architecture),
     context_packs: [],
+    perspectives,
     repo_context: repoContext || null
   };
 

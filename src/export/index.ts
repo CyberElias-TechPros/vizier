@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Project } from "../types/pim";
-import { renderOverview, renderArchitecture, renderSchema, renderTasks, renderDecisions, renderApiContract, renderContextPack } from "./markdown";
+import { renderOverview, renderArchitecture, renderSchema, renderTasks, renderDecisions, renderApiContract, renderContextPack, renderPerspectives } from "./markdown";
 import { generateCursorRules, generateClaudeMd, generateAgentsMd } from "./agentRules";
 import { generateAllContextPacks } from "../core/contextPack";
 
@@ -99,6 +99,13 @@ export async function exportPlan(project: Project): Promise<ExportResult> {
     const decisionsPath = path.join(planDir, "decisions.md");
     fs.writeFileSync(decisionsPath, renderDecisions(project), "utf8");
     result.filesWritten.push("plan/decisions.md");
+
+    // Write expert perspectives (if any selected)
+    if (project.perspectives && Object.keys(project.perspectives).length > 0) {
+      const perspectivesPath = path.join(planDir, "perspectives.md");
+      fs.writeFileSync(perspectivesPath, renderPerspectives(project), "utf8");
+      result.filesWritten.push("plan/perspectives.md");
+    }
 
     // Write context packs
     const contextPacks = generateAllContextPacks(project);

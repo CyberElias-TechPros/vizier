@@ -1,5 +1,6 @@
 ﻿import { Question, Answer, QUESTION_BANKS } from "../types/questionBank";
 import { ProjectCategory } from "../types/pim";
+import { buildPerspectivesQuestion } from "./perspectives";
 
 export interface QuestionnaireState {
   category: ProjectCategory;
@@ -12,7 +13,8 @@ export interface QuestionnaireState {
  * Get all questions for a category.
  */
 export function getQuestionsForCategory(category: ProjectCategory): Question[] {
-  return QUESTION_BANKS[category] || [];
+  const base = QUESTION_BANKS[category] || [];
+  return [...base, buildPerspectivesQuestion(category)];
 }
 
 /**

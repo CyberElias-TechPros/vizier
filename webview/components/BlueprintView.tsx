@@ -6,16 +6,25 @@ interface BlueprintViewProps {
   entities: any[];
   tasks: any[];
   apiContract: any;
+  perspectives?: any;
 }
 
-export function BlueprintView({ product, architecture, entities, tasks, apiContract }: BlueprintViewProps) {
-  const [activeTab, setActiveTab] = React.useState<"overview" | "architecture" | "schema" | "api">("overview");
+export function BlueprintView({ product, architecture, entities, tasks, apiContract, perspectives }: BlueprintViewProps) {
+  const [activeTab, setActiveTab] = React.useState<"overview" | "architecture" | "schema" | "api" | "perspectives">("overview");
+
+  const hasPerspectives = perspectives && Object.keys(perspectives).length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Tab bar */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--vscode-panel-border)", padding: "0 16px", flexWrap: "wrap" }}>
-        {(["overview", "architecture", "schema", "api"] as const).map((tab) => (
+        {([
+          "overview",
+          "architecture",
+          "schema",
+          "api",
+          ...(hasPerspectives ? (["perspectives"] as const) : [])
+        ] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -42,6 +51,7 @@ export function BlueprintView({ product, architecture, entities, tasks, apiContr
         {activeTab === "architecture" && <ArchitectureTab architecture={architecture} />}
         {activeTab === "schema" && <SchemaTab entities={entities} />}
         {activeTab === "api" && <ApiTab apiContract={apiContract} />}
+        {activeTab === "perspectives" && <PerspectivesTab perspectives={perspectives} />}
       </div>
     </div>
   );
@@ -203,6 +213,65 @@ function ApiTab({ apiContract }: { apiContract: any }) {
           {apiContract.notes}
         </div>
       )}
+    </div>
+  );
+}
+
+function PerspectivesTab({ perspectives }: { perspectives: any }) {
+  if (!perspectives || Object.keys(perspectives).length === 0) {
+    return <p style={{ opacity: 0.75, padding: "16px" }}>No expert perspectives were selected for this plan.</p>;
+  }
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "16px" }}>Expert Perspectives</h2>
+      {Object.keys(perspectives).map((id) => {
+        const p = perspectives[id];
+        return (
+          <div key={id} style={{ marginBottom: "24px", padding: "12px", backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)", borderRadius: "6px" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>
+              {p.label} <span style={{ opacity: 0.5, fontSize: "12px" }}>{p.roleId}</span>
+            </h3>
+            <p style={{ fontSize: "13px", opacity: 0.9, marginBottom: "8px", whiteSpace: "pre-line" }}>{p.summary}</p>
+
+            {p.recommendations?.length > 0 && (
+              <div style={{ marginBottom: "8px" }}>
+                <strong style={{ fontSize: "12px" }}>Recommendations</strong>
+                <ul style={{ paddingLeft: "18px", marginTop: "4px" }}>
+                  {p.recommendations.map((r: any, i: number) => (
+                    <li key={i} style={{ fontSize: "12px", marginBottom: "4px" }}>
+                      <span style={{ fontWeight: "600" }}>{r.priority ? `[${r.priority}] ` : ""}{r.title}</span>
+                      {r.detail ? <span style={{ opacity: 0.8 }}> — {r.detail}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {p.risks?.length > 0 && (
+              <div style={{ marginBottom: "8px" }}>
+                <strong style={{ fontSize: "12px" }}>Risks</strong>
+                <ul style={{ paddingLeft: "18px", marginTop: "4px" }}>
+                  {p.risks.map((risk: string, i: number) => (
+                    <li key={i} style={{ fontSize: "12px", opacity: 0.85 }}>{risk}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {p.open_questions?.length > 0 && (
+              <div>
+                <strong style={{ fontSize: "12px" }}>Open Questions</strong>
+                <ul style={{ paddingLeft: "18px", marginTop: "4px" }}>
+                  {p.open_questions.map((q: string, i: number) => (
+                    <li key={i} style={{ fontSize: "12px", opacity: 0.85 }}>{q}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

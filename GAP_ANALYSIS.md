@@ -70,3 +70,4 @@ Status legend: `open` · `in_progress` · `done` · `wontfix`
 8. Eval harness — open
 9. CI — **done**
 10. In-UI editing / section regeneration — open
+11. Role-based planning lenses (10 roles) — **done**: users opt into expert perspectives (Developer, Visual/UX Designer, Growth, Behavioral, Product Marketing, Conversion Copywriter, Global Market Copywriter, Marketing Officer, System Administrator, IT Support) via a multi-select question; each runs an extra LLM stage and renders to `plan/perspectives.md` + a webview tab. Recommended lenses are pre-selected per category. (Also fixed `multi_select` UI, previously unsupported.)

@@ -37,6 +37,7 @@ export interface Project {
   decisions: Decision[];
   rules: Rule[];
   context_packs: ContextPack[];
+  perspectives?: Record<string, Perspective>;
   repo_context: RepoContext | null;
 }
 
@@ -210,5 +211,20 @@ export interface ContextPack {
   decisions: Decision[];
   rules: Rule[];
   files: string[];
-  do_not: string[]; 
+  do_not: string[];
+}
+
+export interface PerspectiveRecommendation {
+  title: string;
+  detail: string;
+  priority: string;
+}
+
+export interface Perspective {
+  roleId: string;
+  label: string;
+  summary: string;
+  recommendations: PerspectiveRecommendation[];
+  risks: string[];
+  open_questions: string[];
 }

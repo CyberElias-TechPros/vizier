@@ -33,18 +33,34 @@ export function QuestionPanel({
   onBack,
   canGoBack
 }: QuestionPanelProps) {
-  const [selected, setSelected] = React.useState<string>("");
+  const [selectedValues, setSelectedValues] = React.useState<string[]>(() => {
+    if (type === "multi_select" && default_value) {
+      return default_value.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  });
   const [showTooltip, setShowTooltip] = React.useState(false);
 
+  const isMulti = type === "multi_select";
+
+  const toggleMulti = (value: string) => {
+    setSelectedValues((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
   const handleSubmit = () => {
-    onAnswer(questionId, selected || default_value);
-    setSelected("");
+    const value = isMulti ? selectedValues.join(",") : selectedValues[0] || default_value;
+    onAnswer(questionId, value);
+    setSelectedValues([]);
   };
 
   const handleSkip = () => {
     onSkip(questionId);
-    setSelected("");
+    setSelectedValues([]);
   };
+
+  const isSelected = (value: string) => selectedValues.includes(value);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px" }}>
@@ -71,6 +87,12 @@ export function QuestionPanel({
         </button>
       </div>
 
+      {isMulti && (
+        <p style={{ fontSize: "12px", opacity: 0.6, marginTop: 0, marginBottom: "12px" }}>
+          Select all that apply (recommended are pre-selected).
+        </p>
+      )}
+
       {/* Tooltip */}
       {showTooltip && (
         <div style={{ backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)", padding: "12px", borderRadius: "6px", marginBottom: "16px", fontSize: "13px" }}>
@@ -80,30 +102,57 @@ export function QuestionPanel({
 
       {/* Options */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {type === "select" && options && (
+        {options && options.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {options.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setSelected(option.value)}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  padding: "12px",
-                  border: selected === option.value ? "1px solid var(--vscode-focusBorder)" : "1px solid var(--vscode-panel-border)",
-                  borderRadius: "6px",
-                  backgroundColor: selected === option.value ? "var(--vscode-editor-inactiveSelectionBackground)" : "transparent",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  color: "var(--vscode-editor-foreground)"
-                }}
-              >
-                <span style={{ fontWeight: "600", fontSize: "14px" }}>{option.label}</span>
-                {option.description && (
-                  <span style={{ fontSize: "12px", opacity: 0.75, marginTop: "4px" }}>{option.description}</span>
-                )}
-              </button>
-            ))}
+            {options.map((option) => {
+              const selected = isSelected(option.value);
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => (isMulti ? toggleMulti(option.value) : setSelectedValues([option.value]))}
+                  style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: "10px",
+                    padding: "12px",
+                    border: selected ? "1px solid var(--vscode-focusBorder)" : "1px solid var(--vscode-panel-border)",
+                    borderRadius: "6px",
+                    backgroundColor: selected ? "var(--vscode-editor-inactiveSelectionBackground)" : "transparent",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    color: "var(--vscode-editor-foreground)"
+                  }}
+                >
+                  {isMulti && (
+                    <span
+                      style={{
+                        marginTop: "2px",
+                        width: "16px",
+                        height: "16px",
+                        flexShrink: 0,
+                        borderRadius: "3px",
+                        border: "1px solid var(--vscode-focusBorder)",
+                        backgroundColor: selected ? "var(--vscode-focusBorder)" : "transparent",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "11px",
+                        color: "var(--vscode-button-foreground)"
+                      }}
+                    >
+                      {selected ? "✓" : ""}
+                    </span>
+                  )}
+                  <span style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: "600", fontSize: "14px" }}>{option.label}</span>
+                    {option.description && (
+                      <span style={{ fontSize: "12px", opacity: 0.75, marginTop: "4px" }}>{option.description}</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

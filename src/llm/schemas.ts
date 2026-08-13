@@ -216,6 +216,25 @@ export const classificationSchema = z
   })
   .passthrough();
 
+export const perspectiveSchema = z
+  .object({
+    summary: looseString,
+    recommendations: z
+      .array(
+        z
+          .object({
+            title: looseString,
+            detail: looseString,
+            priority: looseString
+          })
+          .passthrough()
+      )
+      .catch([]),
+    risks: looseStringArray,
+    open_questions: looseStringArray
+  })
+  .passthrough();
+
 export type ValidationStage =
   | "prd"
   | "architecture"
@@ -223,7 +242,8 @@ export type ValidationStage =
   | "api"
   | "tasks"
   | "decisions"
-  | "classification";
+  | "classification"
+  | "perspective";
 
 const schemaByStage: Record<ValidationStage, z.ZodTypeAny> = {
   prd: prdSchema,
@@ -232,7 +252,8 @@ const schemaByStage: Record<ValidationStage, z.ZodTypeAny> = {
   api: apiContractSchema,
   tasks: tasksSchema,
   decisions: decisionsSchema,
-  classification: classificationSchema
+  classification: classificationSchema,
+  perspective: perspectiveSchema
 };
 
 /**
