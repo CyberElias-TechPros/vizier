@@ -55,6 +55,20 @@ function ctxSummary(ctx: PerspectiveContext): string {
 
 export const PERSPECTIVE_LENSES: PerspectiveLens[] = [
   {
+    id: "product_manager",
+    roleId: "33-product-manager",
+    label: "Product Manager",
+    description: "Roadmap prioritization, scope control, user stories, success metrics",
+    suggested: ["saas", "mobile", "game", "browser_ext", "cli_tool", "internal_tool"],
+    system:
+      "You are a product manager. Define roadmap priorities, MVP scope guardrails, user stories, and success metrics. Output ONLY valid JSON.",
+    buildPrompt: (ctx) =>
+      ctxSummary(ctx) +
+      "\n\nFrom a product management perspective, plan scope and sequencing. Return JSON:\n" +
+      '{"summary": "one paragraph on product readiness", "recommendations": [{"title": "short", "detail": "why/how", "priority": "must|should|could"}], "risks": ["product risk"], "open_questions": ["question to resolve"]}\n' +
+      "Cover: roadmap prioritization, MVP scope guardrails, user-story definition, success metrics/KPIs, and stakeholder communication. 4-7 recommendations."
+  },
+  {
     id: "developer",
     roleId: "23-developer",
     label: "Developer",
@@ -165,6 +179,48 @@ export const PERSPECTIVE_LENSES: PerspectiveLens[] = [
       "\n\nFrom a marketing officer perspective, plan go-to-market execution. Return JSON:\n" +
       '{"summary": "one paragraph on the marketing plan", "recommendations": [{"title": "short", "detail": "why/how", "priority": "must|should|could"}], "risks": ["marketing execution risk"], "open_questions": ["question to resolve"]}\n' +
       "Cover: channel mix, campaign calendar (launch + sustained), budget posture, partnerships, and measurement. 4-7 recommendations."
+  },
+  {
+    id: "security_engineer",
+    roleId: "34-security-engineer",
+    label: "Security Engineer",
+    description: "Threat modeling, authN/authZ, secrets handling, compliance, OWASP",
+    suggested: ["saas", "internal_tool", "cli_tool", "mobile"],
+    system:
+      "You are a security engineer. Plan threat modeling, authentication/authorization, secrets handling, and compliance requirements. Output ONLY valid JSON.",
+    buildPrompt: (ctx) =>
+      ctxSummary(ctx) +
+      "\n\nFrom a security engineering perspective, plan the app's security posture. Return JSON:\n" +
+      '{"summary": "one paragraph on the security posture", "recommendations": [{"title": "short", "detail": "why/how", "priority": "must|should|could"}], "risks": ["security risk"], "open_questions": ["question to resolve"]}\n' +
+      "Cover: threat model (OWASP top risks), authentication/authorization flows, secrets & key management, data protection/privacy, dependency/CI security, and compliance needs. 4-7 recommendations."
+  },
+  {
+    id: "devops_hosting_engineer",
+    roleId: "35-devops-hosting-engineer",
+    label: "DevOps/Hosting Engineer",
+    description: "Deployment pipeline, environments, containers, DNS/CDN, cost",
+    suggested: ["saas", "internal_tool", "cli_tool"],
+    system:
+      "You are a DevOps and hosting engineer. Plan deployment pipeline, environments, containers, DNS/CDN, and hosting cost strategy. Output ONLY valid JSON.",
+    buildPrompt: (ctx) =>
+      ctxSummary(ctx) +
+      "\n\nFrom a DevOps/hosting perspective, plan how this app ships and runs. Return JSON:\n" +
+      '{"summary": "one paragraph on the deployment strategy", "recommendations": [{"title": "short", "detail": "why/how", "priority": "must|should|could"}], "risks": ["infra/deployment risk"], "open_questions": ["question to resolve"]}\n' +
+      "Cover: hosting/platform choice, CI/CD pipeline, environment strategy, containers/orchestration, DNS/CDN/SSL, backups, observability, and hosting cost projections. 4-7 recommendations."
+  },
+  {
+    id: "maintenance_engineer",
+    roleId: "36-maintenance-engineer",
+    label: "Maintenance Engineer",
+    description: "Post-launch upkeep, upgrades, deprecation, on-call, tech-debt paydown",
+    suggested: ["saas", "internal_tool"],
+    system:
+      "You are a maintenance engineer. Plan post-launch upkeep: upgrade cadence, deprecation policy, on-call, and tech-debt paydown. Output ONLY valid JSON.",
+    buildPrompt: (ctx) =>
+      ctxSummary(ctx) +
+      "\n\nFrom a maintenance engineering perspective, plan long-term upkeep. Return JSON:\n" +
+      '{"summary": "one paragraph on the maintenance strategy", "recommendations": [{"title": "short", "detail": "why/how", "priority": "must|should|could"}], "risks": ["maintenance risk"], "open_questions": ["question to resolve"]}\n' +
+      "Cover: dependency upgrade cadence, deprecation policy, on-call rotation, monitoring/drift detection, tech-debt paydown schedule, and knowledge transfer/documentation. 4-7 recommendations."
   },
   {
     id: "system_administrator",

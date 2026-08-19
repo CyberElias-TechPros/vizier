@@ -22,7 +22,7 @@ test("manifest activates the vizier sidebar view", () => {
 function stageFromSystem(system: string): string {
   const s = system.toLowerCase();
   if (s.includes("software project classifier")) return "classification";
-  if (s.includes("product manager")) return "prd";
+  if (s.includes("product requirements document")) return "prd";
   if (s.includes("senior software architect") && s.includes("tech stack")) return "architecture";
   if (s.includes("database architect")) return "schema";
   if (s.includes("backend api architect")) return "api";
@@ -38,6 +38,10 @@ function stageFromSystem(system: string): string {
   if (s.includes("marketing officer")) return "marketing_officer";
   if (s.includes("system administrator")) return "system_administrator";
   if (s.includes("it support lead")) return "it_support";
+  if (s.includes("product manager")) return "product_manager";
+  if (s.includes("security engineer")) return "security_engineer";
+  if (s.includes("devops and hosting engineer")) return "devops_hosting_engineer";
+  if (s.includes("maintenance engineer")) return "maintenance_engineer";
   return "unknown";
 }
 
@@ -163,7 +167,10 @@ test("end-to-end: classify -> blueprint (with perspectives) -> export", async ()
   const project = await generateBlueprint(
     "A habit tracking mobile app",
     category,
-    { perspectives: "visual_ux_designer,developer" },
+    {
+      perspectives:
+        "product_manager,developer,security_engineer,devops_hosting_engineer,maintenance_engineer,visual_ux_designer"
+    },
     () => {},
     null,
     undefined,
@@ -174,12 +181,24 @@ test("end-to-end: classify -> blueprint (with perspectives) -> export", async ()
   assert.ok(project.architecture, "architecture present");
   assert.ok(project.tasks.length >= 1, "tasks present");
   assert.ok(project.perspectives, "perspectives object present");
-  assert.ok(project.perspectives!["visual_ux_designer"], "visual_ux_designer perspective generated");
-  assert.ok(project.perspectives!["developer"], "developer perspective generated");
-  assert.ok(
-    project.perspectives!["visual_ux_designer"].recommendations.length >= 1,
-    "perspective has recommendations"
-  );
+
+  // Every role the planning pipeline needs must produce a section.
+  const expectedRoles: Record<string, string> = {
+    product_manager: "Product Manager",
+    developer: "Developer",
+    security_engineer: "Security Engineer",
+    devops_hosting_engineer: "DevOps/Hosting Engineer",
+    maintenance_engineer: "Maintenance Engineer",
+    visual_ux_designer: "Visual/UX Designer"
+  };
+  for (const [id, label] of Object.entries(expectedRoles)) {
+    assert.ok(project.perspectives![id], `${id} perspective generated`);
+    assert.equal(project.perspectives![id].label, label, `${id} label`);
+    assert.ok(
+      project.perspectives![id].recommendations.length >= 1,
+      `${id} has recommendations`
+    );
+  }
 
   const result = await exportPlan(project);
   assert.equal(result.success, true, "export succeeded: " + result.errors.join("; "));
@@ -190,4 +209,9 @@ test("end-to-end: classify -> blueprint (with perspectives) -> export", async ()
 
   const overview = fs.readFileSync(path.join(ws, "plan", "overview.md"), "utf8");
   assert.ok(overview.includes("Disclaimer"), "generated plan docs carry a disclaimer");
+
+  const perspectives = fs.readFileSync(path.join(ws, "plan", "perspectives.md"), "utf8");
+  for (const label of Object.values(expectedRoles)) {
+    assert.ok(perspectives.includes(label), `perspectives.md covers ${label}`);
+  }
 });

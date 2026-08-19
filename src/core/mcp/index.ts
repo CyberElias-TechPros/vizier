@@ -41,11 +41,14 @@ export async function startMcpBridge(services: Parameters<typeof createMcpServer
     listener.once("error", (err) => reject(err));
   });
 
+  const address = listener.address();
+  const boundPort = typeof address === "object" && address ? address.port : port;
+
   return {
     server,
     app,
     sessions,
-    port,
+    port: boundPort,
     dispose: async () => {
       await new Promise<void>((resolve) => listener.close(() => resolve()));
       await server.close();

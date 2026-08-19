@@ -113,7 +113,13 @@ export async function generateBlueprint(
     .map((d: any) => ({
       id: String(d.id).trim(),
       topic: String(d.topic).trim(),
-      options: Array.isArray(d.options) ? d.options.map((o: any) => String(o)) : [],
+      options: Array.isArray(d.options)
+        ? d.options.map((o: any) => ({
+            name: String(o?.name ?? o ?? "").trim(),
+            pros: Array.isArray(o?.pros) ? o.pros.map((p: any) => String(p)) : [],
+            cons: Array.isArray(o?.cons) ? o.cons.map((c: any) => String(c)) : []
+          }))
+        : [],
       chosen: String(d.chosen || "").trim(),
       rationale: String(d.rationale || "").trim(),
       impacts: Array.isArray(d.impacts) ? d.impacts.map((i: any) => String(i)) : [],

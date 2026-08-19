@@ -477,7 +477,7 @@
     "watch:webview": "node scripts/build-webview.js --watch",
     "watch:all": "npm-run-all --parallel watch:extension watch:webview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
-    "test": "tsx --tsconfig tsconfig.test.json --test \"test/unit/**/*.test.ts\"",
+    "test": "tsx --tsconfig tsconfig.test.json --test \"test/unit/**/*.test.ts\" \"test/integration/**/*.test.ts\"",
     "eval": "tsx scripts/eval.ts",
     "omniroute:dev": "node scripts/omniroute-dev.mjs",
     "package": "vsce package",

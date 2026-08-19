@@ -327,16 +327,16 @@ export function renderDecisions(project: Project): string {
     md += `## ${decision.id}: ${decision.topic}\n\n`;
     md += `**Chosen:** ${decision.chosen}\n\n`;
     
-    if (decision.options.length > 0) {
+if (decision.options.length > 0) {
       md += `**Options Considered:**\n\n`;
       for (const option of decision.options) {
         md += `### ${option.name}\n\n`;
-        if (option.pros.length > 0) {
+        if (option.pros?.length > 0) {
           md += `**Pros:**\n`;
           for (const pro of option.pros) md += `- ${pro}\n`;
           md += `\n`;
         }
-        if (option.cons.length > 0) {
+        if (option.cons?.length > 0) {
           md += `**Cons:**\n`;
           for (const con of option.cons) md += `- ${con}\n`;
           md += `\n`;
