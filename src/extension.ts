@@ -55,6 +55,7 @@ import { registerMemoryBrowser } from "./ui/sidebar/memory-browser";
 import { registerAstExplorer } from "./ui/sidebar/ast-explorer";
 import { registerMcpConnections } from "./ui/sidebar/mcp-connections";
 import { showDashboard, DashboardServices } from "./ui/dashboard";
+import { queryAll, run } from "./core/memory/database";
 
 let questionnaireState: QuestionnaireState | null = null;
 let currentIdea: string = "";
@@ -96,6 +97,12 @@ export async function activate(context: vscode.ExtensionContext) {
   statusBar.registerContextMenu();
   context.subscriptions.push(statusBar);
   vizierStatusBar = statusBar;
+
+  // Phase 5 §5.4: honor vizier.ui.showStatusBar
+  if (!vscode.workspace.getConfiguration("vizier").get<boolean>("ui.showStatusBar", true)) {
+    statusBar.dispose();
+    vizierStatusBar = null;
+  }
 
   // --- Phase 1: Memory Engine activation sequence -----------------------
   statusBar.update({ memory: "indexing" });
@@ -140,24 +147,28 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   // Incremental re-indexing on save/delete/rename, per architecture doc §5.3.
-  const saveWatcher = vscode.workspace.onDidSaveTextDocument(async (doc) => {
-    if (!languageForPath(doc.uri.fsPath)) return;
-    try {
-      const chunks = indexFile(doc.uri.fsPath, doc.getText());
-      logEpisode("indexFile", `Re-indexed on save (${chunks.length} chunks)`, doc.uri.fsPath);
-      await writeSharedMemory();
-    } catch (err) {
-      console.error(`[Vizier] Failed to re-index ${doc.uri.fsPath} on save:`, err);
-    }
-    if (astLanguageForPath(doc.uri.fsPath)) {
+  // Saves are debounced by 500ms to avoid thrashing during rapid edits.
+  const saveWatcher = vscode.workspace.onDidSaveTextDocument(
+    debounce(async (doc) => {
+      if (!languageForPath(doc.uri.fsPath)) return;
       try {
-        await parseFile(doc.uri.fsPath, doc.getText());
-        astGraph = buildWorkspaceGraph(snapshotParsedFiles());
+        const chunks = indexFile(doc.uri.fsPath, doc.getText());
+        logEpisode("indexFile", `Re-indexed on save (${chunks.length} chunks)`, doc.uri.fsPath);
+        await writeSharedMemory();
+        await pruneMemoryToCap();
       } catch (err) {
-        console.error(`[Vizier] Failed to re-parse ${doc.uri.fsPath} on save:`, err);
+        console.error(`[Vizier] Failed to re-index ${doc.uri.fsPath} on save:`, err);
       }
-    }
-  });
+      if (incrementalEnabled() && astLanguageForPath(doc.uri.fsPath)) {
+        try {
+          await parseFile(doc.uri.fsPath, doc.getText());
+          astGraph = buildWorkspaceGraph(snapshotParsedFiles());
+        } catch (err) {
+          console.error(`[Vizier] Failed to re-parse ${doc.uri.fsPath} on save:`, err);
+        }
+      }
+    }, 500)
+  );
 
   const deleteWatcher = vscode.workspace.onDidDeleteFiles((e) => {
     for (const uri of e.files) {
@@ -425,7 +436,7 @@ export async function activate(context: vscode.ExtensionContext) {
  */
 async function indexWorkspaceForMemory(): Promise<number> {
   const files = await vscode.workspace.findFiles(
-    "**/*.{ts,tsx,js,jsx,py}",
+    indexedLanguageGlob(),
     "**/{node_modules,dist,out,build,.git}/**"
   );
 
@@ -439,6 +450,7 @@ async function indexWorkspaceForMemory(): Promise<number> {
       console.error(`[Vizier] Failed to index ${uri.fsPath}:`, err);
     }
   }
+  await pruneMemoryToCap();
   return indexed;
 }
 
@@ -448,7 +460,7 @@ async function indexWorkspaceForMemory(): Promise<number> {
  */
 async function indexWorkspaceForAst(): Promise<number> {
   const files = await vscode.workspace.findFiles(
-    "**/*.{ts,tsx,js,jsx,py}",
+    indexedLanguageGlob(),
     "**/{node_modules,dist,out,build,.git}/**"
   );
 
@@ -477,6 +489,61 @@ function snapshotParsedFiles(): Map<string, CachedTree> {
 }
 
 // --- Phase 3: MCP bridge lifecycle ----------------------------------------
+
+// Phase 5 §5.4: which languages get indexed (vizier.ast.languages).
+const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
+  typescript: ["ts", "tsx"],
+  javascript: ["js", "jsx"],
+  python: ["py"]
+};
+
+function indexedLanguageGlob(): string {
+  const languages = vscode.workspace
+    .getConfiguration("vizier")
+    .get<string[]>("ast.languages", ["typescript", "javascript", "python"]);
+  const exts = new Set<string>();
+  for (const lang of languages) {
+    const mapped = LANGUAGE_EXTENSIONS[lang];
+    if (mapped) for (const ext of mapped) exts.add(ext);
+  }
+  return `**/*.{${Array.from(exts).join(",")}}`;
+}
+
+// Phase 5 §5.4: incremental re-indexing on save (vizier.ast.enableIncremental).
+function incrementalEnabled(): boolean {
+  return vscode.workspace.getConfiguration("vizier").get<boolean>("ast.enableIncremental", true);
+}
+
+// Phase 5 §5.4: cap on stored semantic chunks (vizier.memory.maxChunks; 0 = unlimited).
+async function pruneMemoryToCap(): Promise<void> {
+  const cap = vscode.workspace.getConfiguration("vizier").get<number>("memory.maxChunks", 50000);
+  if (cap <= 0) return;
+  try {
+    const [{ c }] = queryAll<{ c: number }>("SELECT COUNT(*) AS c FROM chunks WHERE layer='semantic'");
+    if (c <= cap) return;
+    run(
+      `DELETE FROM chunks WHERE layer='semantic' AND id NOT IN (
+         SELECT id FROM chunks WHERE layer='semantic' ORDER BY created_at DESC LIMIT ?
+       )`,
+      [cap]
+    );
+    logEpisode("pruneMemory", `Pruned semantic chunks to cap ${cap} (was ${c})`);
+  } catch (err) {
+    console.error("[Vizier] Failed to prune semantic chunks:", err);
+  }
+}
+
+// Phase 5 §5.3: debounce helper for rapid-edit bursts.
+function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return ((...args: any[]) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = undefined;
+      fn(...args);
+    }, ms);
+  }) as T;
+}
 
 async function startMcp(): Promise<void> {
   if (mcpBridge) return;

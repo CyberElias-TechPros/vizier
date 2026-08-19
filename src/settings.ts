@@ -317,6 +317,44 @@ export const vizierSettingDefinitions: VizierSettingDefinition[] = [
     defaultValue: 3000,
     placeholder: "3000",
     description: "Local port for the MCP bridge (SSE endpoint at http://localhost:PORT/sse)."
+  },
+  {
+    key: "vizier.ast.languages",
+    label: "Languages to index",
+    type: "json",
+    defaultValue: ["typescript", "javascript", "python"],
+    placeholder: '["typescript","javascript","python"]',
+    description: "Languages indexed by the memory + AST engines."
+  },
+  {
+    key: "vizier.ast.enableIncremental",
+    label: "Incremental AST re-indexing",
+    type: "boolean",
+    defaultValue: true,
+    description: "Re-parse and re-graph files automatically on save."
+  },
+  {
+    key: "vizier.ui.showStatusBar",
+    label: "Show status bar indicator",
+    type: "boolean",
+    defaultValue: true,
+    description: "Show the unified Vizier status bar indicator."
+  },
+  {
+    key: "vizier.identity.watchPatterns",
+    label: "Identity file watch patterns",
+    type: "json",
+    defaultValue: ["**/v3code.md", "**/.clauderc", "**/.cursorrules"],
+    placeholder: '["**/v3code.md","**/.clauderc","**/.cursorrules"]',
+    description: "Glob patterns for identity rules auto-sync (identity layer)."
+  },
+  {
+    key: "vizier.memory.maxChunks",
+    label: "Max semantic chunks",
+    type: "number",
+    defaultValue: 50000,
+    placeholder: "50000",
+    description: "Maximum stored semantic chunks (0 = unlimited). Oldest chunks are pruned first."
   }
 ];
 

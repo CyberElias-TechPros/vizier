@@ -436,6 +436,33 @@
           "type": "number",
           "default": 3000,
           "description": "Local port for the MCP bridge. SSE endpoint: http://localhost:PORT/sse (client -> server: POST /messages)."
+        },
+        "vizier.ast.languages": {
+          "type": "array",
+          "default": ["typescript", "javascript", "python"],
+          "items": { "type": "string" },
+          "description": "Languages indexed by the memory + AST engines."
+        },
+        "vizier.ast.enableIncremental": {
+          "type": "boolean",
+          "default": true,
+          "description": "Re-parse and re-graph files automatically on save (500ms debounced)."
+        },
+        "vizier.ui.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the unified Vizier status bar indicator."
+        },
+        "vizier.identity.watchPatterns": {
+          "type": "array",
+          "default": ["**/v3code.md", "**/.clauderc", "**/.cursorrules"],
+          "items": { "type": "string" },
+          "description": "Glob patterns for identity rules auto-sync."
+        },
+        "vizier.memory.maxChunks": {
+          "type": "number",
+          "default": 50000,
+          "description": "Maximum stored semantic chunks (0 = unlimited). Oldest chunks are pruned first."
         }
       }
     }
