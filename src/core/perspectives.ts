@@ -83,6 +83,34 @@ export const PERSPECTIVE_LENSES: PerspectiveLens[] = [
       "Focus on: module/code structure, testing strategy, CI hygiene, tech-debt, maintainability, and developer experience. 4-7 recommendations."
   },
   {
+    id: "ui_ux_designer",
+    roleId: "37-ui-ux-designer",
+    label: "UI/UX Designer",
+    description: "User flows, information architecture, wireframes, usability testing",
+    suggested: ["saas", "mobile", "game", "browser_ext", "internal_tool"],
+    system:
+      "You are a UI/UX designer. Define user flows, information architecture, interface patterns, and usability test plans. Output ONLY valid JSON.",
+    buildPrompt: (ctx) =>
+      ctxSummary(ctx) +
+      "\n\nFrom a UI/UX design perspective, plan the product's interaction model. Return JSON:\n" +
+      '{"summary": "one paragraph on the UX approach", "recommendations": [{"title": "short", "detail": "why/how", "priority": "must|should|could"}], "risks": ["UX risk"], "open_questions": ["question to resolve"]}\n' +
+      "Cover: core user flows and journeys, information architecture/navigation, wireframe-level screen structure, interaction patterns, usability testing plan, and onboarding UX. 4-7 recommendations."
+  },
+  {
+    id: "qa_engineer",
+    roleId: "38-qa-engineer",
+    label: "QA/Test Engineer",
+    description: "Test strategy, coverage targets, test environments, release gates",
+    suggested: ["saas", "mobile", "game", "cli_tool", "internal_tool", "browser_ext"],
+    system:
+      "You are a QA and test engineer. Plan the test strategy, coverage targets, test environments, and release gates. Output ONLY valid JSON.",
+    buildPrompt: (ctx) =>
+      ctxSummary(ctx) +
+      "\n\nFrom a QA engineering perspective, plan verification. Return JSON:\n" +
+      '{"summary": "one paragraph on the test strategy", "recommendations": [{"title": "short", "detail": "why/how", "priority": "must|should|could"}], "risks": ["quality risk"], "open_questions": ["question to resolve"]}\n' +
+      "Cover: test pyramid (unit/integration/e2e), coverage targets per layer, test environments and data, CI quality gates, regression strategy, and manual test plans for critical flows. 4-7 recommendations."
+  },
+  {
     id: "visual_ux_designer",
     roleId: "32-visual-ux-designer",
     label: "Visual/UX Designer",

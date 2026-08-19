@@ -30,6 +30,8 @@ function stageFromSystem(system: string): string {
   if (s.includes("architect documenting")) return "decisions";
   if (s.includes("senior software engineer reviewing")) return "developer";
   if (s.includes("visual/ux designer")) return "visual_ux_designer";
+  if (s.includes("ui/ux designer")) return "ui_ux_designer";
+  if (s.includes("qa and test engineer")) return "qa_engineer";
   if (s.includes("growth specialist")) return "growth_specialist";
   if (s.includes("behavioral designer")) return "behavioral_designer";
   if (s.includes("product marketing manager")) return "product_marketing_manager";
@@ -169,7 +171,7 @@ test("end-to-end: classify -> blueprint (with perspectives) -> export", async ()
     category,
     {
       perspectives:
-        "product_manager,developer,security_engineer,devops_hosting_engineer,maintenance_engineer,visual_ux_designer"
+        "product_manager,ui_ux_designer,developer,qa_engineer,security_engineer,devops_hosting_engineer,maintenance_engineer,visual_ux_designer"
     },
     () => {},
     null,
@@ -185,7 +187,9 @@ test("end-to-end: classify -> blueprint (with perspectives) -> export", async ()
   // Every role the planning pipeline needs must produce a section.
   const expectedRoles: Record<string, string> = {
     product_manager: "Product Manager",
+    ui_ux_designer: "UI/UX Designer",
     developer: "Developer",
+    qa_engineer: "QA/Test Engineer",
     security_engineer: "Security Engineer",
     devops_hosting_engineer: "DevOps/Hosting Engineer",
     maintenance_engineer: "Maintenance Engineer",
