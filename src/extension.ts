@@ -17,15 +17,171 @@ import { ErrorCode, VizierError, extractErrorMessage, logError, isTransientError
 import { validateAndSanitizeIdea } from "./validation";
 import { vizierSettingDefinitions } from "./settings";
 
+// --- Phase 1: Memory Engine ------------------------------------------
+import { initDatabase, closeDatabase } from "./core/memory/database";
+import { initIdentityLayer } from "./core/memory/identity-layer";
+import { indexFile, removeFileChunks, renameFileChunks, languageForPath } from "./core/memory/semantic-layer";
+import { semanticSearch } from "./core/memory/vector-search";
+import { logEpisode } from "./core/memory/episodic-layer";
+import { writeSharedMemory, sharedMemoryPath } from "./core/memory/shared-memory";
+
+// --- Phase 2: AST Engine ----------------------------------------------
+import * as path from "path";
+import {
+  initParserEngine,
+  parseFile,
+  parseSnippet,
+  getCachedTree,
+  getAllCachedFiles,
+  languageForPath as astLanguageForPath
+} from "./core/ast/parser-engine";
+import type { CachedTree } from "./core/ast/parser-engine";
+import { buildWorkspaceGraph } from "./core/ast/workspace-graph";
+import type { WorkspaceGraph } from "./core/ast/workspace-graph";
+import { getFileStructure } from "./core/ast/get-file-structure";
+import { getSymbolAtPosition } from "./core/ast/get-symbol-at-position";
+import { validateSyntax } from "./core/ast/validate-syntax";
+import { renameSymbol } from "./core/ast/rename";
+import type { TextEdit } from "./core/ast/edit-utils";
+
+// --- Phase 3: MCP Bridge ------------------------------------------------
+import * as fs from "fs";
+import { startMcpBridge, McpServices, McpBridgeHandle } from "./core/mcp";
+
 let questionnaireState: QuestionnaireState | null = null;
 let currentIdea: string = "";
 let currentProject: any = null;
 
-export function activate(context: vscode.ExtensionContext) {
+// --- Phase 2: workspace AST state --------------------------------------
+let astGraph: WorkspaceGraph | null = null;
+
+// --- Phase 3: MCP bridge handle -----------------------------------------
+let mcpBridge: McpBridgeHandle | null = null;
+
+export async function activate(context: vscode.ExtensionContext) {
   console.log("Vizier extension is now active");
 
   initVizierSecrets(context);
   showPrivacyNotice(context);
+
+  // --- Phase 1: Memory Engine activation sequence -----------------------
+  const memoryStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  memoryStatusBar.text = "$(sync~spin) Vizier: Indexing...";
+  memoryStatusBar.show();
+  context.subscriptions.push(memoryStatusBar);
+
+  try {
+    await initDatabase(context.globalStorageUri.fsPath);
+    initIdentityLayer(context);
+
+    // Initial workspace indexing (semantic layer). Kept intentionally
+    // simple/synchronous-ish for Phase 1 — Phase 2's incremental workspace
+    // graph will replace the "index everything on activate" approach.
+    await indexWorkspaceForMemory();
+    await writeSharedMemory();
+
+    memoryStatusBar.text = "$(check) Vizier: Memory ready";
+    context.subscriptions.push({ dispose: () => closeDatabase() });
+  } catch (err) {
+    console.error("[Vizier] Memory engine failed to initialize:", err);
+    memoryStatusBar.text = "$(alert) Vizier: Memory init failed";
+    vscode.window.showWarningMessage(
+      "Vizier's memory engine failed to start. Planning features still work; memory search will be unavailable."
+    );
+  }
+
+  // --- Phase 2: AST engine activation -----------------------------------
+  const astStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+  astStatusBar.text = "$(sync~spin) Vizier: Parsing...";
+  astStatusBar.show();
+  context.subscriptions.push(astStatusBar);
+
+  try {
+    await initParserEngine(path.join(__dirname, "wasm"));
+    const parsed = await indexWorkspaceForAst();
+    astStatusBar.text = `$(file-code) Vizier: ${parsed} file(s) parsed`;
+  } catch (err) {
+    console.error("[Vizier] AST engine failed to initialize:", err);
+    astStatusBar.text = "$(alert) Vizier: AST init failed";
+  }
+
+  // --- Phase 3: MCP bridge activation -----------------------------------
+  const mcpStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98);
+  context.subscriptions.push(mcpStatusBar);
+
+  const mcpConfig = vscode.workspace.getConfiguration("vizier");
+  const mcpEnabled = mcpConfig.get<boolean>("mcpEnabled", true);
+  const mcpPort = mcpConfig.get<number>("mcpPort", 3000);
+
+  if (mcpEnabled) {
+    const services: McpServices = {
+      readFile: (filePath) => {
+        try {
+          return fs.readFileSync(filePath, "utf8");
+        } catch {
+          return null;
+        }
+      },
+      getCachedTree: (filePath) => getCachedTree(filePath),
+      parseFile: async (filePath, text) => parseFile(filePath, text),
+      getAllParsedFiles: () => snapshotParsedFiles(),
+      getGraph: () => astGraph,
+      logEpisode: (toolName, summary, filePath) => logEpisode(toolName, summary, filePath)
+    };
+
+    try {
+      mcpBridge = await startMcpBridge(services, mcpPort);
+      mcpStatusBar.text = `$(link) Vizier: MCP :${mcpPort}`;
+      mcpStatusBar.tooltip = "Vizier MCP bridge — connect any MCP client to http://localhost:3000/sse";
+      mcpStatusBar.show();
+      context.subscriptions.push({
+        dispose: () => {
+          mcpBridge?.dispose();
+          mcpBridge = null;
+        }
+      });
+    } catch (err) {
+      console.error("[Vizier] MCP bridge failed to start:", err);
+      mcpStatusBar.text = "$(alert) Vizier: MCP failed";
+      mcpStatusBar.show();
+    }
+  }
+
+  // Incremental re-indexing on save/delete/rename, per architecture doc §5.3.
+  const saveWatcher = vscode.workspace.onDidSaveTextDocument(async (doc) => {
+    if (!languageForPath(doc.uri.fsPath)) return;
+    try {
+      const chunks = indexFile(doc.uri.fsPath, doc.getText());
+      logEpisode("indexFile", `Re-indexed on save (${chunks.length} chunks)`, doc.uri.fsPath);
+      await writeSharedMemory();
+    } catch (err) {
+      console.error(`[Vizier] Failed to re-index ${doc.uri.fsPath} on save:`, err);
+    }
+    if (astLanguageForPath(doc.uri.fsPath)) {
+      try {
+        await parseFile(doc.uri.fsPath, doc.getText());
+        astGraph = buildWorkspaceGraph(snapshotParsedFiles());
+      } catch (err) {
+        console.error(`[Vizier] Failed to re-parse ${doc.uri.fsPath} on save:`, err);
+      }
+    }
+  });
+
+  const deleteWatcher = vscode.workspace.onDidDeleteFiles((e) => {
+    for (const uri of e.files) {
+      removeFileChunks(uri.fsPath);
+      logEpisode("removeFileChunks", "File deleted", uri.fsPath);
+    }
+  });
+
+  const renameWatcher = vscode.workspace.onDidRenameFiles((e) => {
+    for (const { oldUri, newUri } of e.files) {
+      renameFileChunks(oldUri.fsPath, newUri.fsPath);
+      logEpisode("renameFileChunks", `Renamed to ${newUri.fsPath}`, newUri.fsPath);
+    }
+  });
+
+  context.subscriptions.push(saveWatcher, deleteWatcher, renameWatcher);
 
   const provider = new VizierViewProvider(context.extensionUri, context);
 
@@ -81,7 +237,252 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  context.subscriptions.push(planNewAppCmd, openSidebarCmd, exportPlanCmd);
+  // --- Phase 1 commands (per architecture doc §4.4) ---------------------
+  const indexWorkspaceCmd = vscode.commands.registerCommand("vizier.indexWorkspace", async () => {
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: "Vizier: Indexing workspace..." },
+      async () => {
+        const count = await indexWorkspaceForMemory();
+        await writeSharedMemory();
+        vscode.window.showInformationMessage(`Vizier indexed ${count} file(s).`);
+      }
+    );
+  });
+
+  const searchMemoryCmd = vscode.commands.registerCommand("vizier.searchMemory", async () => {
+    const query = await vscode.window.showInputBox({
+      prompt: "Search Vizier's semantic memory",
+      placeHolder: "e.g., where do we handle user authentication?"
+    });
+    if (!query) return;
+
+    const results = semanticSearch(query, 15);
+    logEpisode("semanticSearch", `Searched: ${query}`);
+
+    if (results.length === 0) {
+      vscode.window.showInformationMessage("No matches found. Try running \"Vizier: Index Workspace\" first.");
+      return;
+    }
+
+    const picked = await vscode.window.showQuickPick(
+      results.map((r) => ({
+        label: `${r.symbol_name ?? "(unnamed)"}`,
+        description: `${r.file_path}:${r.start_line}-${r.end_line}`,
+        detail: `score ${r.score.toFixed(3)} · ${r.symbol_kind ?? "chunk"}`,
+        result: r
+      })),
+      { placeHolder: `${results.length} result(s) for "${query}"` }
+    );
+
+    if (picked) {
+      const doc = await vscode.workspace.openTextDocument(picked.result.file_path);
+      const editor = await vscode.window.showTextDocument(doc);
+      const range = new vscode.Range(
+        Math.max(0, picked.result.start_line - 1), 0,
+        Math.max(0, picked.result.end_line - 1), 0
+      );
+      editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+      editor.selection = new vscode.Selection(range.start, range.start);
+    }
+  });
+
+  const openSharedMemoryCmd = vscode.commands.registerCommand("vizier.openSharedMemory", async () => {
+    const doc = await vscode.workspace.openTextDocument(sharedMemoryPath());
+    await vscode.window.showTextDocument(doc);
+  });
+
+  // --- Phase 2 commands -------------------------------------------------
+  const astParseWorkspaceCmd = vscode.commands.registerCommand("vizier.astParseWorkspace", async () => {
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: "Vizier: Parsing workspace AST..." },
+      async () => {
+        const parsed = await indexWorkspaceForAst();
+        vscode.window.showInformationMessage(
+          `Vizier parsed ${parsed} file(s); call graph has ${astGraph?.symbols.size ?? 0} symbol(s).`
+        );
+      }
+    );
+  });
+
+  const astFileStructureCmd = vscode.commands.registerCommand("vizier.astFileStructure", async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage("Open a source file first.");
+      return;
+    }
+    const filePath = editor.document.uri.fsPath;
+    let cached = getCachedTree(filePath);
+    if (!cached) cached = await parseFile(filePath, editor.document.getText());
+
+    const structure = getFileStructure(filePath, cached);
+    const md =
+      `# Structure — ${path.basename(filePath)}\n\n` +
+      structure.symbols
+        .map(
+          (s) =>
+            `## ${s.kind} \`${s.name}\` (lines ${s.range.startLine}-${s.range.endLine})\n` +
+            s.children.map((c) => `- ${c.kind} \`${c.name}\` (lines ${c.range.startLine}-${c.range.endLine})`).join("\n")
+        )
+        .join("\n\n") || "_No top-level symbols found._";
+
+    const doc = await vscode.workspace.openTextDocument({ content: md, language: "markdown" });
+    await vscode.window.showTextDocument(doc, { preview: true });
+  });
+
+  const astRenameSymbolCmd = vscode.commands.registerCommand("vizier.astRenameSymbol", async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage("Open a source file first.");
+      return;
+    }
+    const filePath = editor.document.uri.fsPath;
+    const pos = editor.selection.active;
+    let cached = getCachedTree(filePath);
+    if (!cached) cached = await parseFile(filePath, editor.document.getText());
+
+    const symbol = getSymbolAtPosition(cached, pos.line + 1, pos.character);
+    if (!symbol.found || !symbol.name) {
+      vscode.window.showWarningMessage("No symbol at the cursor to rename.");
+      return;
+    }
+
+    const newName = await vscode.window.showInputBox({
+      prompt: `Rename "${symbol.name}" to`,
+      value: symbol.name,
+      validateInput: (value) => (value && value.trim().length > 0 ? null : "Enter a new name")
+    });
+    if (!newName) return;
+
+    const result = renameSymbol(filePath, cached, pos.line + 1, pos.character, newName);
+    if (result.occurrences === 0) {
+      vscode.window.showInformationMessage(`"${result.symbolName}" has no other references.`);
+      return;
+    }
+
+    const confirmed = await vscode.window.showQuickPick(
+      [
+        {
+          label: `Apply ${result.occurrences} edit(s)`,
+          description: `Rename ${result.symbolName} -> ${newName} in ${result.affectedFiles.length} file(s)`
+        },
+        { label: "Cancel", description: "Discard the preview" }
+      ],
+      { placeHolder: "Preview only — nothing is applied yet" }
+    );
+    if (!confirmed || confirmed.label === "Cancel") return;
+
+    await applyTextEdits(result.edits);
+    logEpisode("renameSymbol", `Renamed ${result.symbolName} -> ${newName} (${result.occurrences} reference(s))`, filePath);
+    vscode.window.showInformationMessage(`Renamed ${result.symbolName} -> ${newName}.`);
+  });
+
+  const astValidateFileCmd = vscode.commands.registerCommand("vizier.astValidateFile", async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage("Open a source file first.");
+      return;
+    }
+    const language = astLanguageForPath(editor.document.uri.fsPath);
+    if (!language) {
+      vscode.window.showWarningMessage("Unsupported file type (use .ts/.tsx/.js/.jsx/.py).");
+      return;
+    }
+    const tree = await parseSnippet(editor.document.getText(), language);
+    const { valid, errors } = validateSyntax(tree.rootNode);
+    if (valid) {
+      vscode.window.showInformationMessage("No syntax errors.");
+    } else {
+      const first = errors[0];
+      vscode.window.showErrorMessage(`${errors.length} syntax error(s). First: line ${first.line}: ${first.message}`);
+    }
+  });
+
+  context.subscriptions.push(
+    planNewAppCmd,
+    openSidebarCmd,
+    exportPlanCmd,
+    indexWorkspaceCmd,
+    searchMemoryCmd,
+    openSharedMemoryCmd,
+    astParseWorkspaceCmd,
+    astFileStructureCmd,
+    astRenameSymbolCmd,
+    astValidateFileCmd
+  );
+}
+
+/**
+ * Index all supported source files in the workspace into the semantic
+ * layer. Returns the number of files indexed. Kept as a standalone
+ * function so both activate() and the "Index Workspace" command can call it.
+ */
+async function indexWorkspaceForMemory(): Promise<number> {
+  const files = await vscode.workspace.findFiles(
+    "**/*.{ts,tsx,js,jsx,py}",
+    "**/{node_modules,dist,out,build,.git}/**"
+  );
+
+  let indexed = 0;
+  for (const uri of files) {
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      indexFile(uri.fsPath, doc.getText());
+      indexed++;
+    } catch (err) {
+      console.error(`[Vizier] Failed to index ${uri.fsPath}:`, err);
+    }
+  }
+  return indexed;
+}
+
+/**
+ * Parse all supported source files into the AST cache and rebuild the
+ * workspace call graph. Returns the number of files parsed.
+ */
+async function indexWorkspaceForAst(): Promise<number> {
+  const files = await vscode.workspace.findFiles(
+    "**/*.{ts,tsx,js,jsx,py}",
+    "**/{node_modules,dist,out,build,.git}/**"
+  );
+
+  let parsed = 0;
+  for (const uri of files) {
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await parseFile(uri.fsPath, doc.getText());
+      parsed++;
+    } catch (err) {
+      console.error(`[Vizier] Failed to parse ${uri.fsPath}:`, err);
+    }
+  }
+  astGraph = buildWorkspaceGraph(snapshotParsedFiles());
+  return parsed;
+}
+
+/** Materialize the parser-engine's internal cache into a plain map. */
+function snapshotParsedFiles(): Map<string, CachedTree> {
+  const files = new Map<string, CachedTree>();
+  for (const filePath of getAllCachedFiles()) {
+    const cached = getCachedTree(filePath);
+    if (cached) files.set(filePath, cached);
+  }
+  return files;
+}
+
+/** Convert plain {file, range, newText} edits into a vscode.WorkspaceEdit and apply. */
+function applyTextEdits(edits: TextEdit[]): Thenable<boolean> {
+  const wsEdit = new vscode.WorkspaceEdit();
+  for (const e of edits) {
+    const uri = vscode.Uri.file(e.file);
+    const range = new vscode.Range(
+      e.range.startLine - 1,
+      e.range.startColumn,
+      e.range.endLine - 1,
+      e.range.endColumn
+    );
+    wsEdit.replace(uri, range, e.newText);
+  }
+  return vscode.workspace.applyEdit(wsEdit);
 }
 
 let currentAbort: AbortController | null = null;

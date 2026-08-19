@@ -302,6 +302,21 @@ export const vizierSettingDefinitions: VizierSettingDefinition[] = [
     type: "boolean",
     defaultValue: true,
     description: "Require a human review acknowledgement before exporting a generated plan."
+  },
+  {
+    key: "vizier.mcpEnabled",
+    label: "MCP bridge enabled",
+    type: "boolean",
+    defaultValue: true,
+    description: "Expose Vizier's memory and AST tools to MCP clients over localhost SSE."
+  },
+  {
+    key: "vizier.mcpPort",
+    label: "MCP bridge port",
+    type: "number",
+    defaultValue: 3000,
+    placeholder: "3000",
+    description: "Local port for the MCP bridge (SSE endpoint at http://localhost:PORT/sse)."
   }
 ];
 
