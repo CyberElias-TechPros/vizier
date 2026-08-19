@@ -13,6 +13,7 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { SessionManager } from "./session-manager";
 
 import { CachedTree, parseSnippet, SupportedLanguage } from "../ast/parser-engine";
 import { WorkspaceGraph, buildWorkspaceGraph, findDeclarations } from "../ast/workspace-graph";
@@ -366,17 +367,21 @@ export async function executeTool(
 
 // --- MCP registration ----------------------------------------------------
 
-export function registerTools(server: Server, services: McpServices): void {
+export function registerTools(server: Server, services: McpServices, sessions?: SessionManager): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
+    const sessionId = extra?.sessionId ?? "unknown";
     try {
       const result = await executeTool(name, (args ?? {}) as Record<string, unknown>, services);
+      sessions?.recordToolCall(sessionId, name, true, "ok");
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
+      const message = (err as Error).message;
+      sessions?.recordToolCall(sessionId, name, false, message);
       return {
-        content: [{ type: "text", text: `Error: ${(err as Error).message}` }],
+        content: [{ type: "text", text: `Error: ${message}` }],
         isError: true
       };
     }

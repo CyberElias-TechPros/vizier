@@ -48,6 +48,14 @@ import type { TextEdit } from "./core/ast/edit-utils";
 import * as fs from "fs";
 import { startMcpBridge, McpServices, McpBridgeHandle } from "./core/mcp";
 
+// --- Phase 4: UI Integration ----------------------------------------------
+import { VizierStatusBar } from "./ui/status-bar";
+import { registerPhase4Commands, VizierController } from "./ui/commands";
+import { registerMemoryBrowser } from "./ui/sidebar/memory-browser";
+import { registerAstExplorer } from "./ui/sidebar/ast-explorer";
+import { registerMcpConnections } from "./ui/sidebar/mcp-connections";
+import { showDashboard, DashboardServices } from "./ui/dashboard";
+
 let questionnaireState: QuestionnaireState | null = null;
 let currentIdea: string = "";
 let currentProject: any = null;
@@ -57,6 +65,8 @@ let astGraph: WorkspaceGraph | null = null;
 
 // --- Phase 3: MCP bridge handle -----------------------------------------
 let mcpBridge: McpBridgeHandle | null = null;
+let mcpBridgePort: number | undefined;
+let vizierStatusBar: VizierStatusBar | null = null;
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Vizier extension is now active");
@@ -64,11 +74,31 @@ export async function activate(context: vscode.ExtensionContext) {
   initVizierSecrets(context);
   showPrivacyNotice(context);
 
+  // --- Phase 4: unified status bar --------------------------------------
+  const dashboardServices: DashboardServices = {
+    sessions: () => mcpBridge?.sessions ?? null,
+    mcpRunning: () => mcpBridge !== null,
+    mcpPort: () => mcpBridgePort,
+    parsedFileCount: () => astGraph?.symbols.size ?? 0
+  };
+  const statusBar = new VizierStatusBar(
+    () => showDashboard(context.extensionUri, dashboardServices),
+    async () => {
+      await stopMcp();
+      await startMcp();
+    },
+    () => {
+      void indexWorkspaceForMemory();
+      void indexWorkspaceForAst();
+      statusBar.update({ memory: "indexing", ast: "indexing" });
+    }
+  );
+  statusBar.registerContextMenu();
+  context.subscriptions.push(statusBar);
+  vizierStatusBar = statusBar;
+
   // --- Phase 1: Memory Engine activation sequence -----------------------
-  const memoryStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  memoryStatusBar.text = "$(sync~spin) Vizier: Indexing...";
-  memoryStatusBar.show();
-  context.subscriptions.push(memoryStatusBar);
+  statusBar.update({ memory: "indexing" });
 
   try {
     await initDatabase(context.globalStorageUri.fsPath);
@@ -80,71 +110,33 @@ export async function activate(context: vscode.ExtensionContext) {
     await indexWorkspaceForMemory();
     await writeSharedMemory();
 
-    memoryStatusBar.text = "$(check) Vizier: Memory ready";
+    statusBar.update({ memory: "ready" });
     context.subscriptions.push({ dispose: () => closeDatabase() });
   } catch (err) {
     console.error("[Vizier] Memory engine failed to initialize:", err);
-    memoryStatusBar.text = "$(alert) Vizier: Memory init failed";
+    statusBar.update({ memory: "error" });
     vscode.window.showWarningMessage(
       "Vizier's memory engine failed to start. Planning features still work; memory search will be unavailable."
     );
   }
 
   // --- Phase 2: AST engine activation -----------------------------------
-  const astStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
-  astStatusBar.text = "$(sync~spin) Vizier: Parsing...";
-  astStatusBar.show();
-  context.subscriptions.push(astStatusBar);
+  statusBar.update({ ast: "indexing" });
 
   try {
     await initParserEngine(path.join(__dirname, "wasm"));
     const parsed = await indexWorkspaceForAst();
-    astStatusBar.text = `$(file-code) Vizier: ${parsed} file(s) parsed`;
+    statusBar.update({ ast: "ready", parsedFiles: parsed });
   } catch (err) {
     console.error("[Vizier] AST engine failed to initialize:", err);
-    astStatusBar.text = "$(alert) Vizier: AST init failed";
+    statusBar.update({ ast: "error" });
   }
 
   // --- Phase 3: MCP bridge activation -----------------------------------
-  const mcpStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98);
-  context.subscriptions.push(mcpStatusBar);
-
   const mcpConfig = vscode.workspace.getConfiguration("vizier");
   const mcpEnabled = mcpConfig.get<boolean>("mcpEnabled", true);
-  const mcpPort = mcpConfig.get<number>("mcpPort", 3000);
-
   if (mcpEnabled) {
-    const services: McpServices = {
-      readFile: (filePath) => {
-        try {
-          return fs.readFileSync(filePath, "utf8");
-        } catch {
-          return null;
-        }
-      },
-      getCachedTree: (filePath) => getCachedTree(filePath),
-      parseFile: async (filePath, text) => parseFile(filePath, text),
-      getAllParsedFiles: () => snapshotParsedFiles(),
-      getGraph: () => astGraph,
-      logEpisode: (toolName, summary, filePath) => logEpisode(toolName, summary, filePath)
-    };
-
-    try {
-      mcpBridge = await startMcpBridge(services, mcpPort);
-      mcpStatusBar.text = `$(link) Vizier: MCP :${mcpPort}`;
-      mcpStatusBar.tooltip = "Vizier MCP bridge — connect any MCP client to http://localhost:3000/sse";
-      mcpStatusBar.show();
-      context.subscriptions.push({
-        dispose: () => {
-          mcpBridge?.dispose();
-          mcpBridge = null;
-        }
-      });
-    } catch (err) {
-      console.error("[Vizier] MCP bridge failed to start:", err);
-      mcpStatusBar.text = "$(alert) Vizier: MCP failed";
-      mcpStatusBar.show();
-    }
+    await startMcp();
   }
 
   // Incremental re-indexing on save/delete/rename, per architecture doc §5.3.
@@ -409,6 +401,21 @@ export async function activate(context: vscode.ExtensionContext) {
     astRenameSymbolCmd,
     astValidateFileCmd
   );
+
+  // --- Phase 4: sidebar tree views + commands + dashboard ---------------
+  const memoryBrowser = registerMemoryBrowser(context);
+  context.subscriptions.push({ dispose: () => memoryBrowser.refresh() });
+  registerAstExplorer(context);
+  registerMcpConnections(context, () => mcpBridge?.sessions ?? null);
+
+  const controller: VizierController = {
+    rebuildAst: async () => indexWorkspaceForAst(),
+    startMcp: async () => startMcp(),
+    stopMcp: async () => stopMcp(),
+    showDashboard: () => showDashboard(context.extensionUri, dashboardServices),
+    parsedFileCount: () => astGraph?.symbols.size ?? 0
+  };
+  registerPhase4Commands(context, controller);
 }
 
 /**
@@ -467,6 +474,50 @@ function snapshotParsedFiles(): Map<string, CachedTree> {
     if (cached) files.set(filePath, cached);
   }
   return files;
+}
+
+// --- Phase 3: MCP bridge lifecycle ----------------------------------------
+
+async function startMcp(): Promise<void> {
+  if (mcpBridge) return;
+  const mcpPort = vscode.workspace.getConfiguration("vizier").get<number>("mcpPort", 3000);
+
+  const services: McpServices = {
+    readFile: (filePath) => {
+      try {
+        return fs.readFileSync(filePath, "utf8");
+      } catch {
+        return null;
+      }
+    },
+    getCachedTree: (filePath) => getCachedTree(filePath),
+    parseFile: async (filePath, text) => parseFile(filePath, text),
+    getAllParsedFiles: () => snapshotParsedFiles(),
+    getGraph: () => astGraph,
+    logEpisode: (toolName, summary, filePath) => logEpisode(toolName, summary, filePath)
+  };
+
+  try {
+    mcpBridge = await startMcpBridge(services, mcpPort);
+    mcpBridgePort = mcpBridge.port;
+    vizierStatusBar?.update({ mcp: "running", mcpPort: mcpBridgePort });
+  } catch (err) {
+    console.error("[Vizier] MCP bridge failed to start:", err);
+    mcpBridgePort = undefined;
+    mcpBridge = null;
+    vizierStatusBar?.update({ mcp: "error" });
+    vscode.window.showWarningMessage(
+      `Vizier's MCP bridge failed to start on port ${mcpPort} (is it already in use?).`
+    );
+  }
+}
+
+async function stopMcp(): Promise<void> {
+  if (!mcpBridge) return;
+  await mcpBridge.dispose();
+  mcpBridge = null;
+  mcpBridgePort = undefined;
+  vizierStatusBar?.update({ mcp: "offline", mcpPort: undefined });
 }
 
 /** Convert plain {file, range, newText} edits into a vscode.WorkspaceEdit and apply. */
@@ -682,6 +733,11 @@ function sendCurrentQuestion(provider: VizierViewProvider) {
 
 export function deactivate() {
   console.log("Vizier extension deactivated");
+  if (mcpBridge) {
+    void mcpBridge.dispose();
+    mcpBridge = null;
+    mcpBridgePort = undefined;
+  }
 }
 
 /**

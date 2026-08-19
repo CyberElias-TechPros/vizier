@@ -55,7 +55,12 @@
     "onView:vizier.sidebar",
     "onCommand:vizier.planNewApp",
     "onCommand:vizier.openSidebar",
-    "onCommand:vizier.exportPlan"
+    "onCommand:vizier.exportPlan",
+    "onCommand:vizier.rebuildAst",
+    "onCommand:vizier.startMcp",
+    "onCommand:vizier.stopMcp",
+    "onCommand:vizier.showDashboard",
+    "onCommand:vizier.symbolInfo"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -125,6 +130,53 @@
         "title": "Validate File Syntax",
         "category": "Vizier",
         "icon": "$(check-all)"
+      },
+      {
+        "command": "vizier.rebuildAst",
+        "title": "Rebuild AST Cache",
+        "category": "Vizier",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "vizier.startMcp",
+        "title": "Start MCP Server",
+        "category": "Vizier",
+        "icon": "$(radio-tower)"
+      },
+      {
+        "command": "vizier.stopMcp",
+        "title": "Stop MCP Server",
+        "category": "Vizier",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "vizier.showDashboard",
+        "title": "Show Dashboard",
+        "category": "Vizier",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "vizier.symbolInfo",
+        "title": "Get Symbol Info",
+        "category": "Vizier",
+        "icon": "$(symbol-misc)"
+      },
+      {
+        "command": "vizier.memoryBrowser.search",
+        "title": "Search Semantic Memory",
+        "category": "Vizier",
+        "icon": "$(search)"
+      },
+      {
+        "command": "vizier.astExplorer.refresh",
+        "title": "Refresh AST Explorer",
+        "category": "Vizier",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vizier.statusBarMenu",
+        "title": "Vizier Status Bar Menu",
+        "category": "Vizier"
       }
     ],
     "viewsContainers": {
@@ -143,6 +195,21 @@
           "id": "vizier.sidebar",
           "name": "Vizier",
           "icon": "$(rocket)"
+        },
+        {
+          "id": "vizier.memoryBrowser",
+          "name": "Memory Browser",
+          "icon": "$(database)"
+        },
+        {
+          "id": "vizier.astExplorer",
+          "name": "AST Explorer",
+          "icon": "$(file-code)"
+        },
+        {
+          "id": "vizier.mcpConnections",
+          "name": "MCP Connections",
+          "icon": "$(radio-tower)"
         }
       ]
     },

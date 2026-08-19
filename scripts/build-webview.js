@@ -4,8 +4,11 @@ const path = require("path");
 const watch = process.argv.includes("--watch");
 
 const buildOptions = {
-  entryPoints: [path.join(__dirname, "..", "webview", "index.tsx")],
-  outfile: path.join(__dirname, "..", "dist", "webview.js"),
+  entryPoints: [
+    path.join(__dirname, "..", "webview", "index.tsx"),
+    path.join(__dirname, "..", "webview", "dashboard.tsx")
+  ],
+  outdir: path.join(__dirname, "..", "dist"),
   bundle: true,
   minify: process.env.NODE_ENV === "production",
   sourcemap: true,
@@ -18,6 +21,7 @@ const buildOptions = {
     ".ts": "ts",
   },
   logLevel: "info",
+  entryNames: "[name]",
 };
 
 if (watch) {
@@ -27,5 +31,5 @@ if (watch) {
   });
 } else {
   esbuild.buildSync(buildOptions);
-  console.log("Webview bundle built successfully");
+  console.log("Webview bundles built successfully");
 }

@@ -30,8 +30,8 @@ export interface McpBridgeHandle {
 }
 
 export async function startMcpBridge(services: Parameters<typeof createMcpServer>[0], port: number): Promise<McpBridgeHandle> {
-  const server = createMcpServer(services);
   const sessions = new SessionManager();
+  const server = createMcpServer(services, sessions);
   const app = createSseApp(server, sessions);
 
   const listener = app.listen(port);

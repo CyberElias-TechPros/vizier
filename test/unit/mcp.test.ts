@@ -25,6 +25,7 @@ import { initParserEngine, parseFile, getAllCachedFiles, getCachedTree } from ".
 import { buildWorkspaceGraph } from "../../src/core/ast/workspace-graph.ts";
 
 import { createMcpServer, McpServices } from "../../src/core/mcp/index.ts";
+import { SessionManager } from "../../src/core/mcp/session-manager.ts";
 
 const GRAMMARS_DIR = path.join(__dirname, "..", "..", "node_modules", "tree-sitter-wasms", "out");
 
@@ -291,4 +292,35 @@ test("mcp: tool calls are logged as episodes", async () => {
   assert.ok(logged.some((l) => l.startsWith("rename_symbol:")));
   assert.ok(logged.some((l) => l.startsWith("query_semantic_index:")));
   await closeDatabase();
+});
+
+test("session-manager: ring-buffer log with bounded entries", () => {
+  const sm = new SessionManager({ maxEntries: 3 });
+  const fakeTransport = { onclose: undefined as (() => void) | undefined, start: async () => {}, send: async () => {}, close: async () => {} };
+
+  const id = sm.register(fakeTransport as any, "sess-1");
+  assert.strictEqual(id, "sess-1");
+  assert.strictEqual(sm.count, 1);
+
+  sm.recordToolCall(id, "get_file_structure", true, "ok");
+  sm.recordToolCall(id, "rename_symbol", false, "boom");
+  sm.recordToolCall(id, "validate_syntax", true, "ok");
+  sm.recordToolCall(id, "get_references", true, "ok");
+
+  const log = sm.getLog();
+  assert.strictEqual(log.length, 3, "log is bounded to maxEntries");
+  assert.strictEqual(log[0].tool, "rename_symbol");
+  assert.strictEqual(log[0].ok, false);
+  assert.strictEqual(log[0].message, "boom");
+  assert.strictEqual(log[2].tool, "get_references");
+
+  const limited = sm.getLog(1);
+  assert.strictEqual(limited.length, 1);
+  assert.strictEqual(limited[0].tool, "get_references");
+
+  const session = sm.get(id);
+  assert.strictEqual(session?.toolCalls, 4);
+
+  fakeTransport.onclose?.();
+  assert.strictEqual(sm.count, 0, "session removed on transport close");
 });

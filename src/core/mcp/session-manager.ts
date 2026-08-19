@@ -1,10 +1,10 @@
 /**
  * Vizier MCP Bridge — Session Manager
  *
- * Tracks connected agents/clients and their activity so the bridge can
- * report who is connected and how much they've used it. Lifecycle: a
- * session is registered when an SSE client connects and removed when the
- * transport closes.
+ * Tracks connected agents/clients, their activity, and a bounded in-memory
+ * log of tool invocations (for the MCP Monitor in the Phase 4 dashboard).
+ * Lifecycle: a session is registered when an SSE client connects and
+ * removed when the transport closes.
  */
 
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
@@ -16,9 +16,28 @@ export interface McpSessionInfo {
   lastActiveAt: string;
 }
 
+export interface McpLogEntry {
+  sessionId: string;
+  tool: string;
+  ok: boolean;
+  message: string;
+  at: string;
+}
+
+export interface McpLogOptions {
+  /** Maximum log entries kept (ring buffer). Default 500. */
+  maxEntries?: number;
+}
+
 export class SessionManager {
   private sessions = new Map<string, McpSessionInfo>();
+  private log: McpLogEntry[] = [];
+  private readonly maxEntries: number;
   private nextId = 1;
+
+  constructor(options: McpLogOptions = {}) {
+    this.maxEntries = options.maxEntries ?? 500;
+  }
 
   register(transport: Transport, explicitId?: string): string {
     const id = explicitId ?? `session-${this.nextId++}`;
@@ -29,11 +48,21 @@ export class SessionManager {
     return id;
   }
 
-  recordToolCall(id: string): void {
+  recordToolCall(id: string, tool: string, ok: boolean, message: string): void {
     const session = this.sessions.get(id);
-    if (!session) return;
-    session.toolCalls += 1;
-    session.lastActiveAt = new Date().toISOString();
+    if (session) {
+      session.toolCalls += 1;
+      session.lastActiveAt = new Date().toISOString();
+    }
+    this.log.push({ sessionId: id, tool, ok, message, at: new Date().toISOString() });
+    if (this.log.length > this.maxEntries) {
+      this.log.splice(0, this.log.length - this.maxEntries);
+    }
+  }
+
+  getLog(limit?: number): McpLogEntry[] {
+    const entries = limit && limit > 0 ? this.log.slice(-limit) : this.log;
+    return entries.slice();
   }
 
   remove(id: string): void {
@@ -54,5 +83,6 @@ export class SessionManager {
 
   clear(): void {
     this.sessions.clear();
+    this.log = [];
   }
 }
