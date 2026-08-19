@@ -1,6 +1,8 @@
 ﻿import { Question, Answer, QUESTION_BANKS } from "../types/questionBank";
 import { ProjectCategory } from "../types/pim";
 import { buildPerspectivesQuestion } from "./perspectives";
+import { validateQuestionnaireAnswer } from "../validation";
+import { VizierError, ErrorCode, logError } from "../errors";
 
 export interface QuestionnaireState {
   category: ProjectCategory;
@@ -30,6 +32,8 @@ export function getCurrentQuestion(state: QuestionnaireState): Question | null {
 
 /**
  * Process an answer and advance to the next question.
+ * 
+ * @throws VizierError if answer validation fails
  */
 export function processAnswer(
   state: QuestionnaireState,
@@ -40,7 +44,21 @@ export function processAnswer(
   const question = questions.find(q => q.id === questionId);
   
   if (!question) {
-    return state;
+    const error = new VizierError(
+      ErrorCode.QUESTIONNAIRE_INVALID,
+      `Unknown question ID: ${questionId}`,
+      { userMessage: "Invalid question. Please try again." }
+    );
+    logError(error, { code: ErrorCode.QUESTIONNAIRE_INVALID });
+    throw error;
+  }
+
+  // Validate answer value against question type
+  try {
+    validateQuestionnaireAnswer(questionId, value, question.type, question.options);
+  } catch (validationError) {
+    logError(validationError, { code: ErrorCode.QUESTIONNAIRE_INVALID });
+    throw validationError;
   }
 
   const answer: Answer = {

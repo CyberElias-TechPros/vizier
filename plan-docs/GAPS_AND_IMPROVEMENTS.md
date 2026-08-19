@@ -1,4 +1,4 @@
-﻿# GAPS AND IMPROVEMENTS — Industry Standard Additions
+# GAPS AND IMPROVEMENTS — Industry Standard Additions
 
 ## Purpose
 This document captures angles we are currently lacking compared to industry standards for production-grade VS Code extensions. Prioritized by impact-to-effort ratio.
@@ -113,7 +113,7 @@ async function initTelemetry(context: vscode.ExtensionContext) {
   if (consented === undefined) {
     // First run: ask for consent
     const choice = await vscode.window.showInformationMessage(
-      'Help improve Vibe Plan by sending anonymous usage data? No code or plans are ever sent.',
+      'Help improve Vizier by sending anonymous usage data? No code or plans are ever sent.',
       'Yes, send anonymous data',
       'No, keep it private'
     );
@@ -150,12 +150,12 @@ async function initTelemetry(context: vscode.ExtensionContext) {
 **What to write:**
 
 ```
-# Vibe Plan — Privacy Policy
+# Vizier — Privacy Policy
 
 Last updated: [Date]
 
 ## What We Collect
-Vibe Plan collects ONLY anonymous usage statistics (if you opt in):
+Vizier collects ONLY anonymous usage statistics (if you opt in):
 - Feature usage (which commands you run)
 - Generation success/failure rates
 - Error rates (no error content, just error type)
@@ -216,7 +216,7 @@ function estimateGenerationCost(): string {
 ```
 
 **UI implementation:**
-- If offline: show banner "No internet connection. Vibe Plan requires internet to generate plans."
+- If offline: show banner "No internet connection. Vizier requires internet to generate plans."
 - Before generation: show "Estimated cost: ~$0.01 - $0.05" (based on model pricing)
 - After generation: show actual token usage if available
 

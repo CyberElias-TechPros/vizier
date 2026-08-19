@@ -15,6 +15,7 @@ node_modules/**
 chatdraft.md
 plan-docs/**
 GAP_ANALYSIS.md
+PUBLISHING.md
 scripts/**
 esbuild.config.js
 tailwind.config.js

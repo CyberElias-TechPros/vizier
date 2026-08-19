@@ -178,6 +178,31 @@ export const tasksSchema = z
   })
   .passthrough();
 
+export const roadmapSchema = z
+  .object({
+    overview: looseString,
+    items: z
+      .array(
+        z
+          .object({
+            id: looseString,
+            title: looseString,
+            phase: looseString,
+            what: looseString,
+            where: looseString,
+            target: looseString,
+            why: looseString,
+            best_practices: looseString,
+            verification: looseString,
+            depends_on: looseStringArray,
+            effort: looseString
+          })
+          .passthrough()
+      )
+      .catch([])
+  })
+  .passthrough();
+
 export const decisionsSchema = z
   .object({
     decisions: z
@@ -241,6 +266,7 @@ export type ValidationStage =
   | "schema"
   | "api"
   | "tasks"
+  | "roadmap"
   | "decisions"
   | "classification"
   | "perspective";
@@ -251,6 +277,7 @@ const schemaByStage: Record<ValidationStage, z.ZodTypeAny> = {
   schema: schemaSchema,
   api: apiContractSchema,
   tasks: tasksSchema,
+  roadmap: roadmapSchema,
   decisions: decisionsSchema,
   classification: classificationSchema,
   perspective: perspectiveSchema

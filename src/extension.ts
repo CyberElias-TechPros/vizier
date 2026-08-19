@@ -13,6 +13,9 @@ import {
   getProgress
 } from "./core/questionnaire";
 import { QuestionnaireState } from "./core/questionnaire";
+import { ErrorCode, VizierError, extractErrorMessage, logError, isTransientError, generateTraceId } from "./errors";
+import { validateAndSanitizeIdea } from "./validation";
+import { vizierSettingDefinitions } from "./settings";
 
 let questionnaireState: QuestionnaireState | null = null;
 let currentIdea: string = "";
@@ -40,34 +43,27 @@ export function activate(context: vscode.ExtensionContext) {
           if (!value || value.trim().length < 10) {
             return "Please describe your idea in at least 10 characters";
           }
+          if (value.trim().length > 500) {
+            return "App idea is too long (max 500 characters)";
+          }
           return null;
         }
       });
 
       if (!idea) return;
-      currentIdea = idea;
+      
+      // Validate and sanitize input
+      let sanitizedIdea: string;
+      try {
+        sanitizedIdea = validateAndSanitizeIdea(idea);
+      } catch (error: any) {
+        vscode.window.showErrorMessage(extractErrorMessage(error));
+        return;
+      }
 
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: "Analyzing your idea...",
-          cancellable: false
-        },
-        async () => {
-          try {
-            const category = await classifyIdeaWithFallback(idea);
-            questionnaireState = initQuestionnaire(category);
-            vscode.commands.executeCommand("vizier.sidebar.focus");
-            provider.sendMessage({
-              type: "CLASSIFICATION_RESULT",
-              payload: { category, confidence: 1.0 }
-            });
-            sendCurrentQuestion(provider);
-          } catch (error) {
-            vscode.window.showErrorMessage("Failed to classify idea. Please try again.");
-          }
-        }
-      );
+      currentIdea = sanitizedIdea;
+
+      await classifyIdeaWithRetry(provider, sanitizedIdea);
     }
   );
 
@@ -90,6 +86,66 @@ export function activate(context: vscode.ExtensionContext) {
 
 let currentAbort: AbortController | null = null;
 
+/**
+ * Classify an idea with retry support for transient errors.
+ */
+async function classifyIdeaWithRetry(
+  provider: VizierViewProvider,
+  idea: string,
+  maxRetries: number = 2
+) {
+  const traceId = generateTraceId();
+  let lastError: any;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Analyzing your idea${attempt > 0 ? ` (attempt ${attempt + 1})` : ""}...`,
+        cancellable: false
+      },
+      async () => {
+        try {
+          const category = await classifyIdeaWithFallback(idea);
+          questionnaireState = initQuestionnaire(category);
+          vscode.commands.executeCommand("vizier.sidebar.focus");
+          provider.sendMessage({
+            type: "CLASSIFICATION_RESULT",
+            payload: { category, confidence: 1.0 }
+          });
+          sendCurrentQuestion(provider);
+          lastError = null;  // Success
+          return;
+        } catch (error: any) {
+          lastError = error;
+          logError(error, { 
+            code: ErrorCode.CLASSIFICATION_FAILED,
+            stage: "classification",
+            retryCount: attempt,
+            traceId
+          });
+
+          // Don't retry if not a transient error
+          if (!isTransientError(error) || attempt === maxRetries) {
+            const userMessage = extractErrorMessage(error);
+            const suggestion = error.message?.includes("user")
+              ? "Rephrase your idea and try again."
+              : isTransientError(error)
+              ? "This appears to be a temporary issue. Check your network and try again."
+              : "You can also try picking a category manually.";
+
+            vscode.window.showErrorMessage(
+              `${userMessage} ${suggestion}`
+            );
+          }
+        }
+      }
+    );
+
+    if (!lastError) break;  // Success, exit retry loop
+  }
+}
+
 async function handleGenerateBlueprint(provider: VizierViewProvider) {
   if (!questionnaireState) return;
 
@@ -101,6 +157,7 @@ async function handleGenerateBlueprint(provider: VizierViewProvider) {
   currentAbort = new AbortController();
   const signal = currentAbort.signal;
   const usage = { input: 0, output: 0 };
+  const traceId = generateTraceId();
 
   await vscode.window.withProgress(
     {
@@ -135,13 +192,19 @@ async function handleGenerateBlueprint(provider: VizierViewProvider) {
           payload: { ...project, meta: { tokenUsage: usage } }
         });
       } catch (error: any) {
+        logError(error, {
+          code: ErrorCode.GENERATION_FAILED,
+          stage: "blueprint_generation",
+          traceId
+        });
+
+        const userMessage = signal.aborted
+          ? "Generation was cancelled."
+          : extractErrorMessage(error, "blueprint_generation");
+
         provider.sendMessage({
           type: "ERROR",
-          payload: {
-            message: signal.aborted
-              ? "Generation cancelled."
-              : "Failed to generate blueprint. Please try again."
-          }
+          payload: { message: userMessage }
         });
       } finally {
         currentAbort = null;
@@ -159,6 +222,8 @@ async function handleExportPlan(provider: VizierViewProvider) {
     return;
   }
 
+  const traceId = generateTraceId();
+
   try {
     const result = await exportPlan(currentProject);
     
@@ -168,15 +233,20 @@ async function handleExportPlan(provider: VizierViewProvider) {
         payload: { files: result.filesWritten }
       });
     } else {
+      logError(
+        { message: result.errors.join(", ") },
+        { code: ErrorCode.EXPORT_FAILED, traceId }
+      );
       provider.sendMessage({
         type: "ERROR",
-        payload: { message: result.errors.join(", ") }
+        payload: { message: `Export failed: ${result.errors.join(", ")}` }
       });
     }
   } catch (error) {
+    logError(error, { code: ErrorCode.EXPORT_FAILED, traceId });
     provider.sendMessage({
       type: "ERROR",
-      payload: { message: "Failed to export plan. Please try again." }
+      payload: { message: extractErrorMessage(error) }
     });
   }
 }
@@ -244,8 +314,33 @@ class VizierViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtml(webviewView.webview);
 
-    webviewView.webview.onDidReceiveMessage(async (message) => {
+webviewView.webview.onDidReceiveMessage(async (message) => {
+    try {
       switch (message.type) {
+        case "WEBVIEW_READY":
+          // Webview has signaled it's mounted and ready for messages.
+          // Now safe to send ONBOARDING so the idea input form appears.
+          webviewView.webview.postMessage({
+            type: "ONBOARDING",
+            payload: { forceIdeaInput: true }
+          });
+          break;
+        case "START_PLANNING": {
+          const rawIdea = message.payload?.idea;
+          let sanitizedIdea: string;
+          try {
+            sanitizedIdea = validateAndSanitizeIdea(rawIdea);
+          } catch (error: any) {
+            webviewView.webview.postMessage({
+              type: "ERROR",
+              payload: { message: extractErrorMessage(error) }
+            });
+            break;
+          }
+          currentIdea = sanitizedIdea;
+          await classifyIdeaWithRetry(this, sanitizedIdea);
+          break;
+        }
         case "ANSWER_QUESTION":
           if (questionnaireState) {
             questionnaireState = processAnswer(
@@ -274,8 +369,54 @@ class VizierViewProvider implements vscode.WebviewViewProvider {
         case "EXPORT_PLAN":
           await handleExportPlan(this);
           break;
+        case "GET_SETTINGS": {
+          const config = vscode.workspace.getConfiguration("vizier");
+          const settings: Record<string, any> = {};
+          for (const def of vizierSettingDefinitions) {
+            const key = def.key.replace(/^vizier\./, "");
+            settings[def.key] = config.get(key, def.defaultValue);
+          }
+          webviewView.webview.postMessage({
+            type: "SETTINGS_STATE",
+            payload: { settings, definitions: vizierSettingDefinitions }
+          });
+          break;
+        }
+        case "UPDATE_SETTING": {
+          const { key, value } = message.payload || {};
+          if (!key || typeof key !== "string") break;
+          const configKey = key.replace(/^vizier\./, "");
+          const config = vscode.workspace.getConfiguration("vizier");
+          let normalizedValue: any = value;
+
+          if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (trimmed === "") normalizedValue = "";
+          }
+
+          await config.update(configKey, normalizedValue, vscode.ConfigurationTarget.Global);
+          webviewView.webview.postMessage({
+            type: "SETTINGS_STATE",
+            payload: {
+              settings: { ...(await getVizierSettings()), definitions: vizierSettingDefinitions }
+            }
+          });
+          break;
+        }
+        default:
+          console.warn(`Unknown message type: ${message.type}`);
       }
-    });
+    } catch (error: any) {
+      console.error("Message handler error:", error);
+      logError(error, { code: ErrorCode.UNKNOWN });
+      webviewView.webview.postMessage({
+        type: "ERROR",
+        payload: { 
+          message: "An unexpected error occurred. Please check the VS Code console for details." 
+        }
+      });
+    }
+  });
   }
 
   sendMessage(message: any) {
@@ -294,7 +435,7 @@ class VizierViewProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src \\'none\\'; style-src ${webview.cspSource} \\'unsafe-inline\\'; script-src \\'nonce-${nonce}\\';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vizier</title>
   <style>
@@ -309,6 +450,16 @@ class VizierViewProvider implements vscode.WebviewViewProvider {
 </body>
 </html>`;
   }
+}
+
+async function getVizierSettings(): Promise<Record<string, any>> {
+  const config = vscode.workspace.getConfiguration("vizier");
+  const settings: Record<string, any> = {};
+  for (const def of vizierSettingDefinitions) {
+    const key = def.key.replace(/^vizier\./, "");
+    settings[def.key] = config.get(key, def.defaultValue);
+  }
+  return settings;
 }
 
 function getNonce(): string {

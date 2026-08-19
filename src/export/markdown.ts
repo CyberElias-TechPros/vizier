@@ -155,7 +155,59 @@ export function renderArchitecture(project: Project): string {
 | CI/CD | ${a.infrastructure.ci_cd} |
 
 **Rationale:** ${a.rationale.infrastructure}
+
+${renderConnections(a)}
 `;
+}
+
+function renderConnections(a: Architecture): string {
+  const c = a.connections;
+  if (!c || (!c.modules?.length && !c.data_flow?.length && !c.cross_links?.length)) {
+    return "";
+  }
+
+  const sections: string[] = [];
+
+  if (c.modules?.length) {
+    sections.push(`## Modules & Internal Structure
+
+| Module | Kind | Purpose | Likely Files |
+|--------|------|---------|--------------|
+${c.modules
+  .map(
+    (m) =>
+      `| ${escapePipe(m.name)} | ${escapePipe(m.kind)} | ${escapePipe(m.purpose)} | ${(m.files || []).map(escapePipe).join(", ")} |`
+  )
+  .join("\n")}
+`);
+  }
+
+  if (c.data_flow?.length) {
+    sections.push(`## Data Flow & Hand-offs
+
+| From | To | What | Mechanism |
+|------|-----|------|-----------|
+${c.data_flow
+  .map(
+    (d) =>
+      `| ${escapePipe(d.from)} | ${escapePipe(d.to)} | ${escapePipe(d.what)} | ${escapePipe(d.mechanism)} |`
+  )
+  .join("\n")}
+`);
+  }
+
+  if (c.cross_links?.length) {
+    sections.push(`## Cross-Connections
+
+${c.cross_links.map((l) => `- **${escapePipe(l.source)}** ↔ **${escapePipe(l.target)}**: ${escapePipe(l.relationship)}`).join("\n")}
+`);
+  }
+
+  return sections.join("\n");
+}
+
+function escapePipe(value: unknown): string {
+  return String(value ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
 
 /**
@@ -301,6 +353,51 @@ export function renderDecisions(project: Project): string {
     md += `---\n\n`;
   }
   
+  return md;
+}
+
+/**
+ * Render the production roadmap (master to-do list) to markdown.
+ */
+export function renderRoadmap(project: Project): string {
+  const roadmap = project.roadmap;
+  if (!roadmap) return "# Production Roadmap\n\nNo roadmap defined.";
+
+  const phases = ["foundation", "core", "integration", "polish", "production"];
+  const phaseLabel: Record<string, string> = {
+    foundation: "Foundation & Scaffolding",
+    core: "Core Features",
+    integration: "Integration & Wiring",
+    polish: "Polish, Testing & Docs",
+    production: "Production & Launch"
+  };
+
+  let md = `# Production Roadmap — Master To-Do List
+
+${roadmap.overview}
+
+`;
+
+  for (const phase of phases) {
+    const items = roadmap.items.filter((i) => i.phase === phase);
+    if (items.length === 0) continue;
+
+    md += `## ${phaseLabel[phase]}\n\n`;
+    md += `- [ ] **${items.length} items**\n\n`;
+
+    for (const item of items) {
+      const deps = item.depends_on.length > 0 ? ` *(requires: ${item.depends_on.join(", ")})*` : "";
+      md += `### ☐ ${item.id} — ${item.title}${deps}\n\n`;
+      md += `- **What:** ${item.what}\n`;
+      if (item.where) md += `- **Where:** \`${item.where}\`\n`;
+      if (item.target) md += `- **Connects to:** ${item.target}\n`;
+      if (item.why) md += `- **Why:** ${item.why}\n`;
+      if (item.best_practices) md += `- **Best practices:** ${item.best_practices}\n`;
+      if (item.verification) md += `- **Verify by:** ${item.verification}\n`;
+      md += `- **Effort:** ${item.effort}\n\n`;
+    }
+  }
+
   return md;
 }
 

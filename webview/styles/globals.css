@@ -1,15 +1,1888 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ==========================================================================
+   Vizier — Webview Design System
+   A theme-adaptive, motion-aware UI layer built on VS Code theme variables.
+   ========================================================================== */
 
-:root {
-  --vscode-bg: var(--vscode-editor-background, #1e1e1e);
-  --vscode-fg: var(--vscode-editor-foreground, #d4d4d4);
+/* --- Reset -------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scrollbar-gutter: stable;
 }
 
 body {
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-fg);
-  background: var(--vscode-bg);
+  margin: 0;
+  padding: 0;
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  font-weight: var(--vscode-font-weight, 400);
+  line-height: 1.5;
+  color: var(--vscode-editor-foreground, #d4d4d4);
+  background-color: var(--vscode-editor-background, #1e1e1e);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Prevent flex children from blowing out their container (overflow glitches) */
+#root > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* --- Design tokens ------------------------------------------------------ */
+:root {
+  --viz-radius-sm: 4px;
+  --viz-radius-md: 8px;
+  --viz-radius-lg: 12px;
+  --viz-radius-xl: 16px;
+  --viz-radius-full: 999px;
+
+  --viz-space-1: 4px;
+  --viz-space-2: 8px;
+  --viz-space-3: 12px;
+  --viz-space-4: 16px;
+  --viz-space-5: 24px;
+  --viz-space-6: 32px;
+
+  --viz-font-xs: 11px;
+  --viz-font-sm: 12px;
+  --viz-font-md: 13px;
+  --viz-font-lg: 15px;
+  --viz-font-xl: 17px;
+
+  --viz-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --viz-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --viz-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --viz-duration-fast: 120ms;
+  --viz-duration-base: 200ms;
+  --viz-duration-slow: 320ms;
+
+  --viz-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --viz-shadow-raise: 0 4px 12px rgba(0, 0, 0, 0.28);
+  --viz-shadow-glow: 0 0 0 1px var(--vscode-focusBorder, #007fd4), 0 0 12px color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 40%, transparent);
+
+  --viz-soft: color-mix(in srgb, var(--vscode-editor-foreground, #d4d4d4) 6%, transparent);
+  --viz-soft-strong: color-mix(in srgb, var(--vscode-editor-foreground, #d4d4d4) 12%, transparent);
+  --viz-border: color-mix(in srgb, var(--vscode-editor-foreground, #d4d4d4) 14%, transparent);
+
+  /* --- Signature brand layer: "Drafting Table" ---------------------------
+     One decisive accent (blueprint ink) layered on top of the host theme's
+     own surfaces, so Vizier reads as its own product without fighting
+     VS Code's light/dark chrome. */
+  --viz-accent: #4c7eff;
+  --viz-accent-ink: #2451d6;
+  --viz-accent-bright: #7ea4ff;
+  --viz-accent-soft: color-mix(in srgb, var(--viz-accent) 14%, transparent);
+  --viz-accent-softer: color-mix(in srgb, var(--viz-accent) 7%, transparent);
+  --viz-accent-line: color-mix(in srgb, var(--viz-accent) 30%, transparent);
+
+  --viz-grid-line: color-mix(in srgb, var(--viz-accent) 8%, transparent);
+  --viz-grid-line-strong: color-mix(in srgb, var(--viz-accent) 16%, transparent);
+
+  --viz-font-display: -apple-system, "Segoe UI Semibold", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --viz-font-mono: var(--vscode-editor-font-family, "Cascadia Code", Consolas, monospace);
+
+  --viz-tracking-tight: -0.01em;
+  --viz-tracking-wide: 0.08em;
+
+   /* Secondary accent for success/completion moments */
+  --viz-success: #34d399;
+  --viz-success-soft: color-mix(in srgb, var(--viz-success) 16%, transparent);
+  --viz-danger: color-mix(in srgb, var(--vscode-errorForeground, #f44336) 90%, #ff5555);
+  --viz-warning: var(--vscode-editor-warning-foreground, #ffca2f);
+
+  /* === Royal Vizier palette — rich jewel tones for category distinction === */
+  --viz-royal-purple: #7c4dff;
+  --viz-royal-purple-bright: #9d75ff;
+  --viz-royal-purple-soft: color-mix(in srgb, var(--viz-royal-purple) 14%, transparent);
+  --viz-gold: #ffd04d;
+  --viz-gold-bright: #ffe066;
+  --viz-gold-soft: color-mix(in srgb, var(--viz-gold) 22%, transparent);
+  --viz-emerald: #34d399;
+  --viz-emerald-bright: #4ff0a0;
+  --viz-emerald-soft: color-mix(in srgb, var(--viz-emerald) 14%, transparent);
+  --viz-sapphire: #26a0ff;
+  --viz-sapphire-bright: #5bc2ff;
+  --viz-sapphire-soft: color-mix(in srgb, var(--viz-sapphire) 14%, transparent);
+  --viz-ruby: #ff6b8b;
+  --viz-ruby-bright: #ff8aa3;
+  --viz-ruby-soft: color-mix(in srgb, var(--viz-ruby) 14%, transparent);
+
+  /* Category color maps — applied as CSS custom props per section type */
+  --cat-frontend: var(--viz-sapphire);
+  --cat-frontend-bright: var(--viz-sapphire-bright);
+  --cat-frontend-soft: var(--viz-sapphire-soft);
+  --cat-backend: var(--viz-sapphire);
+  --cat-backend-bright: var(--viz-sapphire-bright);
+  --cat-backend-soft: var(--viz-sapphire-soft);
+  --cat-database: var(--viz-emerald);
+  --cat-database-bright: var(--viz-emerald-bright);
+  --cat-database-soft: var(--viz-emerald-soft);
+  --cat-auth: var(--viz-royal-purple);
+  --cat-auth-bright: var(--viz-royal-purple-bright);
+  --cat-auth-soft: var(--viz-royal-purple-soft);
+  --cat-storage: var(--viz-gold);
+  --cat-storage-bright: var(--viz-gold-bright);
+  --cat-storage-soft: var(--viz-gold-soft);
+  --cat-infra: var(--viz-ruby);
+  --cat-infra-bright: var(--viz-ruby-bright);
+  --cat-infra-soft: var(--viz-ruby-soft);
+
+  --viz-glass-bg: color-mix(in srgb, var(--vscode-editor-background) 72%, transparent);
+  --viz-glass-border: color-mix(in srgb, var(--vscode-editor-foreground) 10%, transparent);
+}
+
+/* ==========================================================================
+   Journey stepper — always-visible phase indicator
+   ========================================================================== */
+
+.viz-stepper {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  gap: 2px;
+  border-bottom: 1px solid var(--viz-border);
+  background: var(--vscode-sideBar-background);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.viz-stepper::-webkit-scrollbar { display: none; }
+
+.viz-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.viz-step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--viz-border);
+  transition: background var(--viz-duration-base) var(--viz-ease),
+    box-shadow var(--viz-duration-base) var(--viz-ease),
+    transform var(--viz-duration-base) var(--viz-ease-spring);
+  flex-shrink: 0;
+}
+
+.viz-step-dot.is-done {
+  background: var(--viz-accent);
+}
+
+.viz-step-dot.is-active {
+  background: var(--viz-accent);
+  box-shadow: 0 0 0 3px var(--viz-accent-softer);
+  transform: scale(1.35);
+  animation: viz-pulse-soft 1.8s var(--viz-ease) infinite;
+}
+
+.viz-step-label {
+  font-family: var(--viz-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  transition: color var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-step.is-active .viz-step-label,
+.viz-step.is-done .viz-step-label {
+  color: var(--viz-accent-bright);
+  font-weight: 600;
+}
+
+.viz-step-connector {
+  width: 14px;
+  height: 1px;
+  background: var(--viz-border);
+  flex-shrink: 0;
+  margin: 0 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.viz-step-connector.is-done::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--viz-accent);
+  animation: viz-fill-line var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+@keyframes viz-fill-line {
+  from { transform: scaleX(0); transform-origin: left; }
+  to   { transform: scaleX(1); transform-origin: left; }
+}
+
+/* ==========================================================================
+   Generation console — the live, staged "what's happening now" feedback
+   ========================================================================== */
+
+.viz-console {
+  position: relative;
+  border-radius: var(--viz-radius-lg);
+  border: 1px solid var(--viz-border);
+  background: var(--viz-glass-bg);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+}
+
+.viz-console-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--viz-soft);
+  animation: viz-fade-up var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+.viz-console-row:last-child { border-bottom: none; }
+
+.viz-console-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  position: relative;
+}
+
+.viz-console-icon.is-pending {
+  border: 1.5px solid var(--viz-border);
+}
+
+.viz-console-icon.is-active {
+  border: 1.5px solid var(--viz-accent);
+}
+
+.viz-console-icon.is-active::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--viz-accent);
+  opacity: 0.4;
+  animation: viz-ping 1.6s var(--viz-ease) infinite;
+}
+
+.viz-console-icon.is-active .viz-console-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--viz-accent);
+  animation: viz-pulse-soft 1.2s var(--viz-ease) infinite;
+}
+
+.viz-console-icon.is-done {
+  background: var(--viz-accent);
+  border: none;
+}
+
+.viz-console-label {
+  font-size: 12.5px;
+  color: var(--vscode-editor-foreground);
+  flex: 1;
+}
+
+.viz-console-row.is-pending .viz-console-label {
+  opacity: 0.4;
+}
+
+.viz-console-row.is-active .viz-console-label {
+  font-weight: 600;
+}
+
+.viz-console-row.is-done .viz-console-label {
+  opacity: 0.7;
+}
+
+/* Checkmark draw-in for completed console rows */
+.viz-check-path {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: viz-draw-check 320ms var(--viz-ease-out) forwards;
+}
+
+@keyframes viz-draw-check {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ==========================================================================
+   Ambient background — subtle animated mesh, used behind hero/generation
+   ========================================================================== */
+
+.viz-mesh-bg {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-mesh-bg::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--viz-accent) 16%, transparent), transparent 45%),
+    radial-gradient(circle at 80% 60%, color-mix(in srgb, var(--viz-accent-bright) 12%, transparent), transparent 50%),
+    radial-gradient(circle at 50% 90%, color-mix(in srgb, var(--viz-success) 8%, transparent), transparent 45%);
+  animation: viz-mesh-drift 14s var(--viz-ease) infinite alternate;
+  filter: blur(2px);
+}
+
+@keyframes viz-mesh-drift {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-3%, 2%) scale(1.06); }
+}
+
+/* ==========================================================================
+   Success burst — export-complete celebratory moment (no emoji, pure motion)
+   ========================================================================== */
+
+.viz-burst {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.viz-burst-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--viz-success);
+  opacity: 0;
+  animation: viz-burst-ring 900ms var(--viz-ease-out) both;
+}
+
+.viz-burst-ring:nth-child(2) { animation-delay: 120ms; }
+.viz-burst-ring:nth-child(3) { animation-delay: 240ms; }
+
+@keyframes viz-burst-ring {
+  0%   { transform: scale(0.6); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* ==========================================================================
+   Page / view transitions
+   ========================================================================== */
+
+.viz-page {
+  animation: viz-page-in var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+@keyframes viz-page-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.995); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.viz-page-exit {
+  animation: viz-page-out var(--viz-duration-fast) var(--viz-ease) both;
+}
+
+@keyframes viz-page-out {
+  to { opacity: 0; transform: translateY(-4px) scale(0.998); }
+}
+
+/* Stagger helper for list-like reveals (options, console rows, files) */
+.viz-stagger-item {
+  animation: viz-fade-up var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+
+/* ==========================================================================
+   Question & option cards — "Drafting Table" question flow
+   ========================================================================== */
+
+/* Container that scrolls the option list */
+.viz-q-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--viz-space-2);
+}
+
+/* The option card itself */
+.viz-q-option {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--viz-space-3);
+  padding: var(--viz-space-3);
+  border-radius: var(--viz-radius-md);
+  border: 1px solid var(--viz-border);
+  background: var(--viz-glass-bg);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  cursor: pointer;
+  text-align: left;
+  color: var(--vscode-editor-foreground);
+  transition:
+    border-color var(--viz-duration-base) var(--viz-ease),
+    background-color var(--viz-duration-base) var(--viz-ease),
+    box-shadow var(--viz-duration-base) var(--viz-ease),
+    transform var(--viz-duration-fast) var(--viz-ease-spring);
+}
+
+/* Hover lift + subtle border brightening */
+.viz-q-option:hover {
+  transform: translateY(-1px);
+  border-color: var(--viz-accent-line);
+}
+
+/* Selected state: gradient border ring + elevated, warm surface */
+.viz-q-option.selected {
+  border-width: 2px;
+  border-style: solid;
+  border-image: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--viz-accent) 90%, transparent),
+      color-mix(in srgb, var(--viz-accent-bright) 70%, transparent)
+    ) 1;
+  background: color-mix(in srgb, var(--viz-accent) 9%, transparent);
+  box-shadow:
+    0 0 0 3px var(--viz-accent-line),
+    0 4px 14px rgba(0, 0, 0, 0.18);
+  transform: translateY(0);
+}
+
+/* Custom radio indicator (single select) */
+.viz-q-radio {
+  position: relative;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 2px solid var(--viz-border);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--viz-duration-base) var(--viz-ease),
+    background-color var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-q-option.selected .viz-q-radio {
+  border-color: var(--viz-accent);
+  background: var(--viz-accent);
+  box-shadow: 0 0 0 3px var(--viz-accent-line);
+}
+
+.viz-q-option.selected .viz-q-radio::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+/* Custom checkbox indicator (multi select) */
+.viz-q-checkbox {
+  position: relative;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 5px;
+  border: 2px solid var(--viz-border);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--viz-duration-base) var(--viz-ease),
+    background-color var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-q-option.selected .viz-q-checkbox {
+  border-color: var(--viz-accent);
+  background: var(--viz-accent);
+  box-shadow: 0 0 0 3px var(--viz-accent-line);
+}
+
+.viz-q-option.selected .viz-q-checkbox::after {
+  content: "";
+  width: 12px;
+  height: 6px;
+  border: 2px solid #ffffff;
+  border-top: none;
+  border-right: none;
+  transform: rotate(-45deg) translate(1px, 0);
+}
+
+/* Label + description */
+.viz-q-label {
+  font-weight: 600;
+  font-size: var(--viz-font-lg);
+  line-height: 1.3;
+  flex: 1;
+  transition: color var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-q-option.selected .viz-q-label {
+  color: var(--viz-accent-bright);
+}
+
+.viz-q-desc {
+  font-size: var(--viz-font-sm);
+  opacity: 0.7;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+/* Right-side "selected" badge */
+.viz-q-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--viz-radius-full);
+  font-size: var(--viz-font-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--viz-accent-bright);
+  background: color-mix(in srgb, var(--viz-accent) 16%, transparent);
+  border: 1px solid var(--viz-accent-line);
+  opacity: 0;
+  transform: translateX(6px) scale(0.9);
+  transition: opacity var(--viz-duration-base) var(--viz-ease),
+    transform var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-q-option.selected .viz-q-badge {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+/* Live selection summary */
+.viz-q-summary {
+  margin-top: var(--viz-space-3);
+  padding: 10px 14px;
+  border-radius: var(--viz-radius-md);
+  border: 1px solid var(--viz-border);
+  background: var(--viz-soft);
+  transition: border-color var(--viz-duration-base) var(--viz-ease),
+    background-color var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-q-summary.has-selection {
+  border-color: var(--viz-accent-line);
+  background: var(--viz-accent-softer);
+}
+
+.viz-q-summary-text {
+  font-size: var(--viz-font-sm);
+  font-weight: 600;
+  opacity: 0.55;
+  transition: opacity var(--viz-duration-base) var(--viz-ease),
+    color var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-q-summary.has-selection .viz-q-summary-text {
+  opacity: 1;
+  color: var(--viz-accent-bright);
+}
+
+/* --- Decorative "crown" for recommended answers ----------------------------- */
+.viz-crown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-crown svg {
+  width: 12px;
+  height: 12px;
+  fill: var(--viz-gold);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--viz-gold) 40%, transparent));
+  animation: viz-glint 2.2s var(--viz-ease) infinite;
+}
+
+@keyframes viz-glint {
+  0%, 100% { opacity: 0.6; filter: brightness(1) drop-shadow(0 0 3px color-mix(in srgb, var(--viz-gold) 40%, transparent)); }
+  50%      { opacity: 1; filter: brightness(1.3) drop-shadow(0 0 6px color-mix(in srgb, var(--viz-gold) 60%, transparent)); }
+}
+
+.viz-q-option.selected .viz-crown {
+  opacity: 1;
+}
+
+
+/* ==========================================================================
+   Royal Vizier — badge, tag & pill family (category color aware)
+   ========================================================================== */
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--viz-radius-full);
+  font-size: var(--viz-font-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: background-color var(--viz-duration-base) var(--viz-ease),
+    color var(--viz-duration-base) var(--viz-ease);
+}
+
+/* Category badges share surface token but vary accent text + glow */
+.viz-badge--sapphire {
+  color: var(--viz-sapphire-bright);
+  background: var(--viz-sapphire-soft);
+  border-color: var(--viz-sapphire-soft);
+}
+
+.viz-badge--emerald {
+  color: var(--viz-emerald-bright);
+  background: var(--viz-emerald-soft);
+  border-color: var(--viz-emerald-soft);
+}
+
+.viz-badge--purple {
+  color: var(--viz-royal-purple-bright);
+  background: var(--viz-royal-purple-soft);
+  border-color: var(--viz-royal-purple-soft);
+}
+
+.viz-badge--gold {
+  color: var(--viz-gold);
+  background: var(--viz-gold-soft);
+  border-color: color-mix(in srgb, var(--viz-gold) 30%, transparent);
+}
+
+.viz-badge--ruby {
+  color: var(--viz-ruby-bright);
+  background: var(--viz-ruby-soft);
+  border-color: var(--viz-ruby-soft);
+}
+
+
+/* Small inline tags (lighter than badges) */
+.viz-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: var(--viz-font-xs);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.viz-tag--gold     { color: var(--viz-gold); }
+.viz-tag--purple    { color: var(--viz-royal-purple-bright); }
+.viz-tag--sapphire  { color: var(--viz-sapphire-bright); }
+
+
+/* ==========================================================================
+   Elevated card family (royal surface)
+   ========================================================================== */
+
+.viz-royal-card {
+  background: var(--vscode-editor-inactiveSelectionBackground);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
+  box-shadow: var(--viz-shadow-card);
+  transition: box-shadow var(--viz-duration-base) var(--viz-ease),
+    border-color var(--viz-duration-base) var(--viz-ease),
+    transform var(--viz-duration-fast) var(--viz-ease-spring);
+}
+
+.viz-royal-card:hover {
+  box-shadow: var(--viz-shadow-raise);
+  transform: translateY(-1px);
+}
+
+/* Gold-accented card for decisions (the vizier's chosen path) */
+.viz-royal-card--gold {
+  border-color: var(--viz-gold-soft);
+  box-shadow: 0 0 0 1px var(--viz-gold-soft), var(--viz-shadow-card);
+}
+
+.viz-royal-card--gold:hover {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--viz-gold) 25%, transparent), var(--viz-shadow-raise);
+}
+
+/* Category-tinted card header */
+.viz-royal-card--header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--viz-border);
+  font-size: var(--viz-font-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.viz-royal-card--header.viz-cat-frontend    { color: var(--viz-sapphire-bright); border-bottom-color: var(--viz-sapphire-soft); }
+.viz-royal-card--header.viz-cat-backend     { color: var(--viz-sapphire-bright); border-bottom-color: var(--viz-sapphire-soft); }
+.viz-royal-card--header.viz-cat-database    { color: var(--viz-emerald-bright); border-bottom-color: var(--viz-emerald-soft); }
+.viz-royal-card--header.viz-cat-auth        { color: var(--viz-royal-purple-bright); border-bottom-color: var(--viz-royal-purple-soft); }
+.viz-royal-card--header.viz-cat-storage     { color: var(--viz-gold); border-bottom-color: color-mix(in srgb, var(--viz-gold) 25%, transparent); }
+.viz-royal-card--header.viz-cat-infra       { color: var(--viz-ruby-bright); border-bottom-color: var(--viz-ruby-soft); }
+.viz-royal-card--header.viz-cat-emerald    { color: var(--viz-emerald-bright); border-bottom-color: var(--viz-emerald-soft); }
+.viz-royal-card--header.viz-cat-sapphire   { color: var(--viz-sapphire-bright); border-bottom-color: var(--viz-sapphire-soft); }
+.viz-royal-card--header.viz-cat-gold       { color: var(--viz-gold); border-bottom-color: color-mix(in srgb, var(--viz-gold) 25%, transparent); }
+
+/* Category-tinted left border accent */
+.viz-royal-card--body {
+  padding: 12px 14px;
+}
+
+.viz-royal-card--body.viz-cat-frontend  { border-left: 2px solid var(--viz-sapphire); }
+.viz-royal-card--body.viz-cat-backend   { border-left: 2px solid var(--viz-sapphire); }
+.viz-royal-card--body.viz-cat-database  { border-left: 2px solid var(--viz-emerald); }
+.viz-royal-card--body.viz-cat-auth      { border-left: 2px solid var(--viz-royal-purple); }
+.viz-royal-card--body.viz-cat-storage   { border-left: 2px solid var(--viz-gold); }
+.viz-royal-card--body.viz-cat-infra     { border-left: 2px solid var(--viz-ruby); }
+.viz-royal-card--body.viz-cat-emerald   { border-left: 2px solid var(--viz-emerald); }
+.viz-royal-card--body.viz-cat-sapphire  { border-left: 2px solid var(--viz-sapphire); }
+.viz-royal-card--body.viz-cat-gold      { border-left: 2px solid var(--viz-gold); }
+
+
+/* ==========================================================================
+   Method / HTTP badges (API Contract)
+   ========================================================================== */
+
+.viz-method {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--viz-radius-sm);
+  font-family: var(--viz-font-mono);
+  font-size: var(--viz-font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid transparent;
+  opacity: 0.9;
+}
+
+.viz-method.get   { background: color-mix(in srgb, var(--viz-emerald) 18%, transparent); color: var(--viz-emerald-bright); border-color: var(--viz-emerald-soft); }
+.viz-method.post  { background: color-mix(in srgb, var(--viz-sapphire) 18%, transparent); color: var(--viz-sapphire-bright); border-color: var(--viz-sapphire-soft); }
+.viz-method.put   { background: color-mix(in srgb, var(--viz-royal-purple) 18%, transparent); color: var(--viz-royal-purple-bright); border-color: var(--viz-royal-purple-soft); }
+.viz-method.patch { background: color-mix(in srgb, var(--viz-warning) 22%, transparent); color: var(--viz-warning); border-color: color-mix(in srgb, var(--viz-warning) 30%, transparent); }
+.viz-method.delete { background: color-mix(in srgb, var(--viz-ruby) 18%, transparent); color: var(--viz-ruby-bright); border-color: var(--viz-ruby-soft); }
+
+
+/* ==========================================================================
+   Priority / effort chips
+   ========================================================================== */
+
+.viz-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--viz-radius-sm);
+  font-size: var(--viz-font-xs);
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.viz-priority.high   { background: color-mix(in srgb, var(--viz-ruby) 16%, transparent); color: var(--viz-ruby-bright); border-color: var(--viz-ruby-soft); }
+.viz-priority.medium { background: color-mix(in srgb, var(--viz-gold) 16%, transparent); color: var(--viz-gold); border-color: color-mix(in srgb, var(--viz-gold) 28%, transparent); }
+.viz-priority.low    { background: color-mix(in srgb, var(--viz-emerald) 14%, transparent); color: var(--viz-emerald-bright); border-color: var(--viz-emerald-soft); }
+
+
+/* --- Stylized status dot with colored ring -------------------------------- */
+.viz-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--viz-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viz-status-dot.done        { background: var(--viz-emerald); box-shadow: 0 0 0 3px color-mix(in srgb, var(--viz-emerald) 24%, transparent); }
+.viz-status-dot.in-progress { background: var(--viz-sapphire); box-shadow: 0 0 0 3px color-mix(in srgb, var(--viz-sapphire) 24%, transparent); }
+.viz-status-dot.not-started { background: color-mix(in srgb, var(--vscode-editor-foreground) 20%, transparent); box-shadow: 0 0 0 3px var(--viz-border); }
+.viz-status-dot.blocked     { background: var(--viz-ruby); box-shadow: 0 0 0 3px color-mix(in srgb, var(--viz-ruby) 24%, transparent); }
+
+
+/* --- Scrollbars ---------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4)) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(121, 121, 121, 0.6));
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* --- Selection ------------------------------------------------------------ */
+::selection {
+  background: var(--vscode-editor-selectionBackground, rgba(0, 127, 212, 0.4));
+  color: inherit;
+}
+
+/* --- Focus visibility ----------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: 2px;
+  border-radius: 4px;
+  transition: outline-color var(--viz-duration-fast) var(--viz-ease);
+}
+
+/* --- Keyframe library ------------------------------------------------------ */
+
+/* Entrance: view transitions */
+@keyframes viz-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes viz-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes viz-fade-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes viz-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes viz-slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes viz-pop {
+  0%   { opacity: 0; transform: scale(0.8); }
+  60%  { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Continuous motion */
+@keyframes viz-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes viz-pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@keyframes viz-ping {
+  0%   { transform: scale(1); opacity: 0.8; }
+  80%, 100% { transform: scale(2.2); opacity: 0; }
+}
+
+@keyframes viz-gradient-pan {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes viz-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes viz-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+
+@keyframes viz-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* --- Animation utility classes --------------------------------------------- */
+
+.viz-anim-fade {
+  animation: viz-fade-in var(--viz-duration-base) var(--viz-ease) both;
+}
+
+.viz-anim-fade-up {
+  animation: viz-fade-up var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+.viz-anim-fade-down {
+  animation: viz-fade-down var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+.viz-anim-scale-in {
+  animation: viz-scale-in var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+.viz-anim-slide-right {
+  animation: viz-slide-in-right var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+.viz-anim-pop {
+  animation: viz-pop var(--viz-duration-slow) var(--viz-ease-spring) both;
+}
+
+.viz-anim-float {
+  animation: viz-float 3.5s var(--viz-ease) infinite;
+}
+
+.viz-anim-breathe {
+  animation: viz-breathe 2.4s var(--viz-ease) infinite;
+}
+
+/* Staggered children (apply delay via inline style --viz-delay) */
+.viz-stagger > * {
+  animation: viz-fade-up var(--viz-duration-slow) var(--viz-ease-out) both;
+  animation-delay: var(--viz-delay, 0ms);
+}
+
+/* Whole-view transitions */
+.viz-view {
+  animation: viz-fade-in var(--viz-duration-base) var(--viz-ease) both;
+}
+
+.viz-view-up {
+  animation: viz-fade-up var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+/* Shimmering gradient bar (progress) */
+.viz-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--vscode-focusBorder, #007fd4) 0%,
+    color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 55%, var(--vscode-editor-foreground, #d4d4d4)) 50%,
+    var(--vscode-focusBorder, #007fd4) 100%
+  );
+  background-size: 200% 100%;
+  animation: viz-shimmer 1.6s var(--viz-ease) infinite;
+}
+
+/* Gradient text accent */
+.viz-gradient-text {
+  background: linear-gradient(
+    100deg,
+    var(--vscode-focusBorder, #007fd4),
+    color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 40%, var(--vscode-textLink-foreground, #3794ff)),
+    var(--vscode-textLink-foreground, #3794ff)
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: viz-shimmer 6s var(--viz-ease) infinite;
+}
+
+/* --- Interaction helpers ----------------------------------------------------- */
+
+/* Lift on hover: cards, options, rows */
+.viz-lift {
+  transition: transform var(--viz-duration-base) var(--viz-ease),
+    box-shadow var(--viz-duration-base) var(--viz-ease),
+    border-color var(--viz-duration-base) var(--viz-ease),
+    background-color var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--viz-shadow-raise);
+}
+
+.viz-lift:active {
+  transform: translateY(0) scale(0.995);
+}
+
+/* Button micro-interactions */
+.viz-press {
+  transition: transform var(--viz-duration-fast) var(--viz-ease),
+    filter var(--viz-duration-fast) var(--viz-ease),
+    background-color var(--viz-duration-base) var(--viz-ease),
+    box-shadow var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-press:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.viz-press:active:not(:disabled) {
+  transform: scale(0.97);
+  filter: brightness(1.05);
+}
+
+/* Panel glow ring (for hero / primary surfaces) */
+.viz-glow {
+  box-shadow: var(--viz-shadow-glow);
+}
+
+/* Soft breathing halo (generating state) */
+.viz-halo {
+  position: relative;
+}
+
+.viz-halo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 0 var(--vscode-focusBorder, #007fd4);
+  animation: viz-ping 1.8s var(--viz-ease) infinite;
+  pointer-events: none;
+}
+
+/* --- Signature: blueprint grid + crop marks -------------------------------- */
+
+/* Fine graph-paper underlay. The one recurring texture that ties the whole
+   product together — a nod to the "structured plan from a rough idea"
+   premise, used sparingly on hero/active surfaces only. */
+.viz-blueprint-grid {
+  position: relative;
+  background-image:
+    linear-gradient(var(--viz-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--viz-grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+.viz-blueprint-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--viz-grid-line-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--viz-grid-line-strong) 1px, transparent 1px);
+  background-size: 96px 96px;
+  background-position: -1px -1px;
+}
+
+/* Corner crop marks — frames the panel the user is actively drafting in.
+   Drawn with pseudo-elements so no extra DOM is needed. */
+.viz-crop {
+  position: relative;
+}
+
+.viz-crop::before,
+.viz-crop::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.viz-crop::before {
+  top: -1px;
+  left: -1px;
+  border-top: 1.5px solid var(--viz-accent);
+  border-left: 1.5px solid var(--viz-accent);
+}
+
+.viz-crop::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 1.5px solid var(--viz-accent);
+  border-right: 1.5px solid var(--viz-accent);
+}
+
+/* Bracketed mono spec-number, e.g. [T-001], [Q·03/08] — the id treatment
+   used everywhere something is genuinely ordered. */
+.viz-spec {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--viz-font-mono);
+  font-size: var(--viz-font-xs);
+  letter-spacing: 0.02em;
+  color: var(--viz-accent-bright);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* Small tracked-out uppercase label — used above headings/sections to
+   name what the reader is looking at, drafting-table style. */
+.viz-eyebrow {
+  font-family: var(--viz-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: var(--viz-tracking-wide);
+  text-transform: uppercase;
+  color: var(--viz-accent-bright);
+  opacity: 0.8;
+}
+
+.viz-display {
+  font-family: var(--viz-font-display);
+  letter-spacing: var(--viz-tracking-tight);
+  font-weight: 650;
+}
+
+/* ==========================================================================
+   Vizier's Counsel rail
+   ========================================================================== */
+
+.viz-counsel-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  z-index: 9000;
+  animation: viz-fade-in var(--viz-duration-base) var(--viz-ease) both;
+}
+
+.viz-counsel-rail {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 312px;
+  max-width: 86vw;
+  background: var(--viz-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-left: 1px solid var(--viz-gold-soft);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.4);
+  transform: translateX(100%);
+  transition: transform var(--viz-duration-slow) var(--viz-ease);
+  z-index: 9100;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.viz-counsel-rail.is-open { transform: translateX(0); pointer-events: auto; visibility: visible; }
+
+.viz-counsel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--viz-border);
+}
+
+.viz-counsel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.viz-counsel-item {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--viz-radius-md);
+  background: var(--viz-soft);
+  border: 1px solid var(--viz-border);
+  border-left: 3px solid var(--viz-sapphire);
+}
+
+.viz-counsel-insight { border-left-color: var(--viz-sapphire); }
+.viz-counsel-warn { border-left-color: var(--viz-ruby); background: color-mix(in srgb, var(--viz-ruby) 10%, var(--viz-soft)); }
+.viz-counsel-tip { border-left-color: var(--viz-emerald); }
+
+.viz-counsel-icon { flex-shrink: 0; margin-top: 1px; }
+.viz-counsel-insight .viz-counsel-icon { color: var(--viz-sapphire-bright); }
+.viz-counsel-warn .viz-counsel-icon { color: var(--viz-ruby-bright); }
+.viz-counsel-tip .viz-counsel-icon { color: var(--viz-emerald-bright); }
+
+.viz-counsel-title { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+.viz-counsel-text { font-size: 12px; opacity: 0.78; line-height: 1.5; }
+
+
+/* Floating counsel button */
+.viz-counsel-fab {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 8800;
+  color: #1a1205;
+  background: linear-gradient(135deg, var(--viz-gold-bright), var(--viz-gold));
+  border: 1px solid color-mix(in srgb, var(--viz-gold) 60%, #fff);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px color-mix(in srgb, var(--viz-gold) 30%, transparent);
+  transition: transform 0.15s var(--viz-ease), box-shadow 0.2s var(--viz-ease);
+}
+
+.viz-counsel-fab:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 14px color-mix(in srgb, var(--viz-gold) 50%, transparent);
+}
+
+.viz-counsel-fab.is-active {
+  background: linear-gradient(135deg, var(--viz-accent-bright), var(--viz-accent));
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 2px var(--viz-accent-line);
+}
+
+
+/* ==========================================================================
+   Command palette
+   ========================================================================== */
+
+.viz-palette-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9500;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  animation: viz-fade-in var(--viz-duration-base) var(--viz-ease) both;
+  backdrop-filter: blur(2px);
+}
+
+.viz-palette {
+  width: 520px;
+  max-width: 92vw;
+  background: var(--viz-glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--viz-gold-soft);
+  border-radius: var(--viz-radius-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px color-mix(in srgb, var(--viz-gold) 15%, transparent);
+  overflow: hidden;
+  animation: viz-palette-in var(--viz-duration-base) var(--viz-ease-out) both;
+}
+
+@keyframes viz-palette-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.viz-palette-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--viz-border);
+  color: var(--vscode-editor-foreground);
+}
+
+.viz-palette-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--vscode-editor-foreground);
+  font-size: 15px;
+  font-family: var(--viz-font-display);
+}
+
+.viz-palette-input::placeholder { color: color-mix(in srgb, var(--vscode-editor-foreground) 45%, transparent); }
+
+.viz-palette-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.viz-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--vscode-editor-foreground);
+  border-radius: var(--viz-radius-md);
+  cursor: pointer;
+  font-size: 13.5px;
+}
+
+.viz-palette-item.is-active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--viz-accent) 18%, transparent), transparent);
+  box-shadow: inset 2px 0 0 var(--viz-accent-bright);
+}
+
+.viz-palette-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--viz-gold-bright);
+  flex-shrink: 0;
+}
+
+.viz-palette-label { flex: 1; }
+.viz-palette-hint { font-size: 11px; opacity: 0.45; }
+.viz-palette-empty { padding: 18px; text-align: center; opacity: 0.55; font-size: 13px; }
+
+
+/* ==========================================================================
+   Decree tour
+   ========================================================================== */
+
+.viz-tour-scrim {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 40%, rgba(40, 20, 70, 0.5), rgba(0, 0, 0, 0.7));
+  z-index: 9600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: viz-fade-in var(--viz-duration-base) var(--viz-ease) both;
+  backdrop-filter: blur(3px);
+}
+
+.viz-tour-card {
+  width: 420px;
+  max-width: 92vw;
+  padding: 26px 26px 22px;
+  text-align: center;
+  background: var(--viz-glass-bg);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid var(--viz-gold-soft);
+  border-radius: var(--viz-radius-lg);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px color-mix(in srgb, var(--viz-gold) 18%, transparent);
+}
+
+.viz-tour-crown {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--viz-gold-bright);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--viz-gold) 22%, transparent), transparent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--viz-gold) 40%, transparent);
+}
+
+.viz-tour-step { opacity: 0.6; }
+
+.viz-tour-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.viz-tour-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--viz-soft-strong);
+  transition: all 0.2s var(--viz-ease);
+}
+
+.viz-tour-dot.is-active {
+  background: var(--viz-gold-bright);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--viz-gold) 60%, transparent);
+  transform: scale(1.3);
+}
+
+.viz-tour-dot.is-done { background: var(--viz-accent); }
+
+
+/* ==========================================================================
+   Revision / diff banner
+   ========================================================================== */
+
+.viz-diff-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 8px 16px 0;
+  border-radius: var(--viz-radius-md);
+  background: color-mix(in srgb, var(--viz-accent) 12%, var(--viz-soft));
+  border: 1px solid var(--viz-accent-line);
+  font-size: 12.5px;
+  animation: viz-fade-in var(--viz-duration-base) var(--viz-ease) both;
+}
+
+.viz-diff-banner strong { color: var(--viz-accent-bright); font-weight: 600; }
+
+
+/* ==========================================================================
+   Plan document preview
+   ========================================================================== */
+
+.viz-doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.viz-doc-list li {
+  position: relative;
+  padding-left: 16px;
+  font-size: 13px;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+
+.viz-doc-list li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--viz-gold);
+}
+
+.viz-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.viz-doc-table td {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--viz-border);
+  vertical-align: top;
+}
+
+
+/* ==========================================================================
+   Effort heatmap cells
+   ========================================================================== */
+
+.viz-heat-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 10px 11px;
+  min-height: 64px;
+  border-radius: var(--viz-radius-md);
+  border: 1px solid transparent;
+  color: var(--vscode-editor-foreground);
+  cursor: pointer;
+  transition: transform 0.15s var(--viz-ease), box-shadow 0.15s var(--viz-ease), filter 0.15s var(--viz-ease);
+}
+
+.viz-heat-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--viz-shadow-card);
+  filter: brightness(1.08);
+}
+
+.viz-heat-cell:focus-visible {
+  outline: 2px solid var(--viz-gold-bright);
+  outline-offset: 1px;
+}
+
+
+/* ==========================================================================
+   Roadmap / Gantt
+   ========================================================================== */
+
+.viz-roadmap-row:hover .viz-roadmap-bar {
+  filter: brightness(1.12);
+}
+
+.viz-roadmap-row:focus-visible {
+  outline: none;
+}
+
+.viz-roadmap-row:focus-visible .viz-roadmap-track {
+  box-shadow: 0 0 0 2px var(--viz-accent-bright);
+}
+
+
+/* ==========================================================================
+   Skeleton shimmer — loading placeholders
+   ========================================================================== */
+
+.viz-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--viz-soft);
+  border-radius: var(--viz-radius-sm);
+}
+
+.viz-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent),
+    transparent
+  );
+  animation: viz-skeleton-sweep 1.4s var(--viz-ease) infinite;
+}
+
+@keyframes viz-skeleton-sweep {
+  100% { transform: translateX(100%); }
+}
+
+
+/* ==========================================================================
+   Royal decree toasts
+   ========================================================================== */
+
+.viz-toast-stack {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  max-width: 320px;
+  pointer-events: none;
+}
+
+.viz-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--viz-radius-md);
+  background: var(--viz-glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--viz-gold-soft);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32), 0 0 0 1px color-mix(in srgb, var(--viz-gold) 20%, transparent);
+  animation: viz-toast-in var(--viz-duration-slow) var(--viz-ease-out) both;
+}
+
+.viz-toast.is-leaving {
+  animation: viz-toast-out var(--viz-duration-base) var(--viz-ease) both;
+}
+
+.viz-toast--info { border-color: var(--viz-accent-line); box-shadow: 0 8px 24px rgba(0,0,0,0.32), 0 0 0 1px var(--viz-accent-line); }
+.viz-toast--success { border-color: color-mix(in srgb, var(--viz-success) 40%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,0.32), 0 0 0 1px color-mix(in srgb, var(--viz-success) 30%, transparent); }
+.viz-toast--error { border-color: color-mix(in srgb, var(--viz-ruby) 40%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,0.32), 0 0 0 1px color-mix(in srgb, var(--viz-ruby) 30%, transparent); }
+
+.viz-toast-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--viz-gold);
+}
+
+.viz-toast--info .viz-toast-icon { color: var(--viz-accent-bright); }
+.viz-toast--success .viz-toast-icon { color: var(--viz-success); }
+.viz-toast--error .viz-toast-icon { color: var(--viz-ruby-bright); }
+
+.viz-toast-body { flex: 1; min-width: 0; }
+.viz-toast-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.viz-toast-msg { font-size: 12px; opacity: 0.8; line-height: 1.4; }
+
+@keyframes viz-toast-in {
+  from { opacity: 0; transform: translateX(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes viz-toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(24px); }
+}
+
+
+/* --- Reusable surfaces ------------------------------------------------------ */
+
+.viz-card {
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
+}
+
+.viz-panel {
+  background-color: var(--vscode-sideBar-background);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
+}
+
+/* Subtle progress-track surface */
+.viz-track {
+  width: 100%;
+  background-color: var(--viz-soft-strong);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* Callout surface for contextual tips / tooltips */
+.viz-callout {
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  border: 1px solid var(--viz-soft);
+  border-radius: var(--viz-radius-md);
+}
+
+/* Fade-in helper for conditional reveals (tooltip, etc.) */
+.viz-fade-item {
+  animation: viz-fade-in var(--viz-duration-base) var(--viz-ease-out) both;
+}
+
+/* ==========================================================================
+   Royal header — animated "throne" accent + ambient depth
+   ========================================================================== */
+
+.viz-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* Ambient radial glow bleeding from behind the header */
+.viz-header::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto -10%;
+  height: 140px;
+  z-index: -1;
+  background:
+    radial-gradient(60% 100% at 20% 0%, color-mix(in srgb, var(--viz-accent) 18%, transparent), transparent 70%),
+    radial-gradient(50% 100% at 85% 0%, color-mix(in srgb, var(--viz-gold) 12%, transparent), transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+/* Animated gradient "throne" strip across the very top */
+.viz-throne-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 1;
+  background: linear-gradient(90deg,
+    var(--viz-gold) 0%,
+    var(--viz-accent) 25%,
+    var(--viz-royal-purple) 50%,
+    var(--viz-accent) 75%,
+    var(--viz-gold) 100%);
+  background-size: 300% 100%;
+  animation: viz-throne-flow 8s linear infinite;
+  opacity: 0.9;
+}
+
+@keyframes viz-throne-flow {
+  0%   { background-position: 0% 0; }
+  100% { background-position: 300% 0; }
+}
+
+/* Living shimmer divider under the header */
+.viz-header-divider {
+  height: 2px;
+  margin-top: 11px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--viz-accent), var(--viz-gold), transparent);
+  background-size: 200% 100%;
+  animation: viz-shimmer 3.5s var(--viz-ease) infinite;
+  opacity: 0.5;
+}
+
+
+
+
+.viz-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: var(--viz-font-md);
+  font-weight: 600;
+  border-radius: var(--viz-radius-md);
+  border: 1px solid transparent;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: transform var(--viz-duration-fast) var(--viz-ease),
+    filter var(--viz-duration-fast) var(--viz-ease),
+    box-shadow var(--viz-duration-base) var(--viz-ease),
+    background-color var(--viz-duration-base) var(--viz-ease),
+    border-color var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.viz-btn:active:not(:disabled) { transform: scale(0.97); }
+.viz-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.viz-btn-primary {
+  background: linear-gradient(180deg, var(--viz-accent-bright), var(--viz-accent));
+  color: #ffffff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, var(--viz-shadow-card);
+}
+
+.viz-btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px var(--viz-accent-line), 0 6px 20px color-mix(in srgb, var(--viz-accent) 35%, transparent);
+}
+
+.viz-btn-secondary {
+  background-color: var(--viz-soft);
+  color: var(--vscode-editor-foreground);
+  border-color: var(--viz-border);
+}
+
+.viz-btn-ghost {
+  background: transparent;
+  color: var(--vscode-editor-foreground);
+  border-color: var(--viz-border);
+}
+
+/* --- Inputs -------------------------------------------------------------- */
+
+.viz-input,
+.viz-textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--viz-font-md);
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--viz-border));
+  border-radius: var(--viz-radius-md);
+  padding: 10px 12px;
+  transition: border-color var(--viz-duration-base) var(--viz-ease),
+    box-shadow var(--viz-duration-base) var(--viz-ease);
+}
+
+.viz-input:focus,
+.viz-textarea:focus {
+  outline: none;
+  border-color: var(--viz-accent);
+  box-shadow: 0 0 0 3px var(--viz-accent-softer);
+}
+
+.viz-textarea {
+  resize: none;
+  line-height: 1.55;
+}
+
+/* --- Base interactive elements ------------------------------------------------ */
+
+button {
+  font-family: inherit;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+a {
+  color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+/* Long content should wrap instead of overflowing (no glitches) */
+p,
+h1,
+h2,
+h3,
+h4,
+span,
+div,
+button,
+a,
+code,
+pre {
+  overflow-wrap: anywhere;
+}
+
+pre,
+code {
+  font-family: var(--vscode-editor-font-family, "Cascadia Code", Consolas, monospace);
+  font-size: 0.92em;
+}
+
+/* --- Screen-reader-only utility ---------------------------------------------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Motion safety ------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- High contrast ------------------------------------------------------------- */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+  }
 }

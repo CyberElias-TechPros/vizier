@@ -1,4 +1,4 @@
-﻿# PLAN 05: Build Phase 1 - Foundation Setup
+# PLAN 05: Build Phase 1 - Foundation Setup
 
 ## Goal of This Phase
 Set up the complete project scaffolding, install dependencies, configure TypeScript, and create the minimal extension that loads in VS Code. At the end of this phase, you will have a "Hello World" extension that activates and shows an empty sidebar.
@@ -141,7 +141,7 @@ See PLAN_04_FILE_STRUCTURE.md for the complete tsconfig.json content.
 3. Check that dist/extension.js and dist/webview.js were created
 4. Press F5 in VS Code to launch Extension Development Host
 5. In the new window, open command palette (Ctrl+Shift+P)
-6. Type "Vibe Planner: Plan New App"
+6. Type "Vizier: Plan New App"
 7. You should see the information message
 
 **Verification checklist:**

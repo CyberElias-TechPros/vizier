@@ -34,12 +34,14 @@ export function QuestionPanel({
   canGoBack
 }: QuestionPanelProps) {
   const [selectedValues, setSelectedValues] = React.useState<string[]>(() => {
-    if (type === "multi_select" && default_value) {
+    if (options && options.length > 0 && default_value) {
       return default_value.split(",").map((s) => s.trim()).filter(Boolean);
     }
     return [];
   });
   const [showTooltip, setShowTooltip] = React.useState(false);
+  const [focusedIndex, setFocusedIndex] = React.useState(0);
+  const optionRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
 
   const isMulti = type === "multi_select";
 
@@ -63,25 +65,35 @@ export function QuestionPanel({
   const isSelected = (value: string) => selectedValues.includes(value);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px" }}>
+    <div className="viz-page" style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px" }}>
       {/* Progress bar */}
-      <div style={{ marginBottom: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "12px", opacity: 0.75 }}>
-          <span>Question {progress.answered + 1} of {progress.total}</span>
-          <span>{progress.percentage}%</span>
+      <div style={{ marginBottom: "22px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+          <span className="viz-spec" style={{ opacity: 0.7 }}>[Q&middot;{String(progress.answered + 1).padStart(2, "0")}/{String(progress.total).padStart(2, "0")}]</span>
+          <span className="viz-spec" style={{ color: "var(--viz-accent-bright)" }}>{progress.percentage}%</span>
         </div>
-        <div style={{ width: "100%", height: "4px", backgroundColor: "var(--vscode-panel-border)", borderRadius: "2px" }}>
-          <div style={{ width: `${progress.percentage}%`, height: "100%", backgroundColor: "var(--vscode-focusBorder)", borderRadius: "2px", transition: "width 0.3s" }} />
+        <div className="viz-track" style={{ height: "4px", overflow: "hidden" }}>
+          <div className="viz-shimmer" style={{ width: `${progress.percentage}%`, height: "100%", borderRadius: "2px", transition: "width 0.4s var(--viz-ease)" }} />
         </div>
       </div>
 
       {/* Question text */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "16px" }}>
-        <h2 style={{ fontSize: "16px", fontWeight: "600", margin: 0, flex: 1 }}>{text}</h2>
+        <h2 className="viz-display viz-fade-item" style={{ fontSize: "17px", margin: 0, flex: 1, lineHeight: 1.35, fontWeight: 600 }}>{text}</h2>
         <button
           onClick={() => setShowTooltip(!showTooltip)}
+          aria-label="Show context for this question"
+          aria-expanded={showTooltip}
+          aria-controls="q-tooltip"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setShowTooltip(!showTooltip);
+            }
+          }}
           title="Why this matters"
-          style={{ background: "none", border: "none", cursor: "pointer", opacity: 0.6, fontSize: "14px" }}
+          className="viz-btn viz-btn-ghost"
+          style={{ padding: 0, width: "24px", height: "24px", borderRadius: "50%", fontSize: "12px", flexShrink: 0 }}
         >
           ?
         </button>
@@ -95,7 +107,7 @@ export function QuestionPanel({
 
       {/* Tooltip */}
       {showTooltip && (
-        <div style={{ backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)", padding: "12px", borderRadius: "6px", marginBottom: "16px", fontSize: "13px" }}>
+        <div id="q-tooltip" role="region" aria-label="Question context" className="viz-callout viz-fade-item" style={{ padding: "12px", marginBottom: "16px", fontSize: "13px" }}>
           {tooltip}
         </div>
       )}
@@ -103,53 +115,68 @@ export function QuestionPanel({
       {/* Options */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {options && options.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {options.map((option) => {
+          <div
+            role={isMulti ? "group" : "radiogroup"}
+            aria-label={text}
+            aria-required={isMulti ? undefined : true}
+            className="viz-q-options"
+          >
+            {options.map((option, idx) => {
               const selected = isSelected(option.value);
+              const isRecommended = default_value?.split(",").map((s) => s.trim()).filter(Boolean).includes(option.value);
+              const optionId = `q-${questionId}-opt-${idx}`;
+              const descId = option.description ? `${optionId}-desc` : undefined;
               return (
                 <button
                   key={option.value}
-                  onClick={() => (isMulti ? toggleMulti(option.value) : setSelectedValues([option.value]))}
-                  style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    gap: "10px",
-                    padding: "12px",
-                    border: selected ? "1px solid var(--vscode-focusBorder)" : "1px solid var(--vscode-panel-border)",
-                    borderRadius: "6px",
-                    backgroundColor: selected ? "var(--vscode-editor-inactiveSelectionBackground)" : "transparent",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    color: "var(--vscode-editor-foreground)"
+                  ref={(el) => { optionRefs.current[idx] = el; }}
+                  role={isMulti ? "checkbox" : "radio"}
+                  aria-checked={selected}
+                  aria-labelledby={optionId}
+                  aria-describedby={descId}
+                  tabIndex={isMulti ? 0 : focusedIndex === idx ? 0 : -1}
+                  onKeyDown={(e) => {
+                    if (isMulti) return;
+                    if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+                      e.preventDefault();
+                      const next = (idx + 1) % options.length;
+                      setFocusedIndex(next);
+                      optionRefs.current[next]?.focus();
+                    } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+                      e.preventDefault();
+                      const prev = (idx - 1 + options.length) % options.length;
+                      setFocusedIndex(prev);
+                      optionRefs.current[prev]?.focus();
+                    }
                   }}
+                  onClick={() => (isMulti ? toggleMulti(option.value) : setSelectedValues([option.value]))}
+                  className={`viz-stagger-item viz-q-option${selected ? " selected" : ""}`}
+                  style={{ ["--viz-delay" as any]: `${idx * 45}ms` }}
                 >
-                  {isMulti && (
-                    <span
-                      style={{
-                        marginTop: "2px",
-                        width: "16px",
-                        height: "16px",
-                        flexShrink: 0,
-                        borderRadius: "3px",
-                        border: "1px solid var(--vscode-focusBorder)",
-                        backgroundColor: selected ? "var(--vscode-focusBorder)" : "transparent",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "11px",
-                        color: "var(--vscode-button-foreground)"
-                      }}
-                    >
-                      {selected ? "✓" : ""}
-                    </span>
-                  )}
-                  <span style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontWeight: "600", fontSize: "14px" }}>{option.label}</span>
+                  {!isMulti && <span className="viz-q-radio" aria-hidden="true" />}
+                  {isMulti && <span className="viz-q-checkbox" aria-hidden="true" />}
+                  <span id={optionId} className="viz-q-label">
+                    {isRecommended && (
+                      <span
+                        className="viz-crown"
+                        aria-label="Recommended"
+                        title="Recommended by Vizier"
+                      >
+                        <svg viewBox="0 0 24 24">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7.91 15.14 4 9.27z" />
+                        </svg>
+                      </span>
+                    )}
+                    {option.label}
                     {option.description && (
-                      <span style={{ fontSize: "12px", opacity: 0.75, marginTop: "4px" }}>{option.description}</span>
+                      <span id={descId} className="viz-q-desc">{option.description}</span>
                     )}
                   </span>
+                  {selected && (
+                    <span className="viz-q-badge" aria-hidden="true">
+                      ✓ Selected
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -157,48 +184,32 @@ export function QuestionPanel({
         )}
       </div>
 
+      {/* Live selection summary */}
+      {options && options.length > 0 && (
+        <div className={`viz-q-summary${selectedValues.length > 0 ? " has-selection" : ""}`}>
+          <span className="viz-q-summary-text">
+            {selectedValues.length > 0
+              ? `Selected (${selectedValues.length}): ${options.filter((o) => selectedValues.includes(o.value)).map((o) => o.label).join(", ")}`
+              : "Nothing selected yet — pick an option above"}
+          </span>
+        </div>
+      )}
+
       {/* Actions */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--vscode-panel-border)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--viz-border)" }}>
         <button
           onClick={onBack}
           disabled={!canGoBack}
-          style={{
-            padding: "8px 16px",
-            background: "transparent",
-            border: "1px solid var(--vscode-panel-border)",
-            borderRadius: "4px",
-            color: "var(--vscode-editor-foreground)",
-            cursor: canGoBack ? "pointer" : "not-allowed",
-            opacity: canGoBack ? 1 : 0.5
-          }}
+          aria-label="Go back to previous question"
+          className="viz-btn viz-btn-ghost"
         >
           Back
         </button>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            onClick={handleSkip}
-            style={{
-              padding: "8px 16px",
-              background: "transparent",
-              border: "1px solid var(--vscode-panel-border)",
-              borderRadius: "4px",
-              color: "var(--vscode-editor-foreground)",
-              cursor: "pointer"
-            }}
-          >
+          <button onClick={handleSkip} className="viz-btn viz-btn-ghost">
             Skip (use default)
           </button>
-          <button
-            onClick={handleSubmit}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "var(--vscode-button-background)",
-              border: "none",
-              borderRadius: "4px",
-              color: "var(--vscode-button-foreground)",
-              cursor: "pointer"
-            }}
-          >
+          <button onClick={handleSubmit} className="viz-btn viz-btn-primary">
             Next
           </button>
         </div>

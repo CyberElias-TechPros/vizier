@@ -1,105 +1,41 @@
-﻿import Anthropic from "@anthropic-ai/sdk";
-import * as vscode from "vscode";
+﻿import * as vscode from "vscode";
 import { ClassificationResult, ProjectCategory } from "../types/pim";
 import { parseAndValidate, ValidationError } from "./schemas";
+import { ModelProvider } from "./types";
+import { complete, getProvider, getEffectiveModel, getEffectiveTemperature, initProviderSecrets } from "./provider";
 
-let client: Anthropic | null = null;
-let extContext: vscode.ExtensionContext | null = null;
-const SECRET_KEY = "vizier.anthropicApiKey";
-
-/**
- * Provide the extension context so the API key can be stored in SecretStorage
- * (encrypted) instead of plaintext settings.
- */
 export function initVizierSecrets(context: vscode.ExtensionContext): void {
-  extContext = context;
+  initProviderSecrets(context);
 }
 
-async function getClient(): Promise<Anthropic> {
-  if (client) {
-    return client;
-  }
+export async function classifyIdea(
+  idea: string,
+  provider?: ModelProvider
+): Promise<ClassificationResult> {
+  const p = provider || (await getProvider());
 
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error("CONFIG_NO_API_KEY");
-  }
+  const response = await complete(
+    {
+      system: getClassificationSystemPrompt(),
+      messages: [{ role: "user", content: idea }],
+      maxTokens: 300,
+      model: getEffectiveModel("classification"),
+      temperature: getEffectiveTemperature(0.7)
+    },
+    p
+  );
 
-  client = new Anthropic({ apiKey });
-  return client;
-}
-
-async function getApiKey(): Promise<string | null> {
-  const config = vscode.workspace.getConfiguration("vizier");
-
-  // Prefer encrypted secret storage
-  if (extContext) {
-    const stored = await extContext.secrets.get(SECRET_KEY);
-    if (stored) {
-      // Migrate away any legacy plaintext copy
-      const legacy = config.get<string>("anthropicApiKey");
-      if (legacy) {
-        await config.update("anthropicApiKey", undefined, vscode.ConfigurationTarget.Global);
-      }
-      return stored;
-    }
-
-    // Migrate a plaintext key set via settings into the secret store
-    const legacy = config.get<string>("anthropicApiKey");
-    if (legacy && legacy.length > 0) {
-      await extContext.secrets.store(SECRET_KEY, legacy);
-      await config.update("anthropicApiKey", undefined, vscode.ConfigurationTarget.Global);
-      return legacy;
-    }
-  } else {
-    const legacy = config.get<string>("anthropicApiKey");
-    if (legacy && legacy.length > 0) {
-      return legacy;
-    }
-  }
-
-  const apiKey = await vscode.window.showInputBox({
-    prompt: "Enter your Anthropic API key",
-    placeHolder: "sk-ant-...",
-    password: true,
-    ignoreFocusOut: true,
-    validateInput: (value) => {
-      if (!value || !value.startsWith("sk-ant-")) {
-        return "API key must start with sk-ant-";
-      }
-      return null;
-    }
-  });
-
-  if (apiKey && extContext) {
-    await extContext.secrets.store(SECRET_KEY, apiKey);
-    return apiKey;
-  }
-
-  return apiKey ?? null;
-}
-
-export async function classifyIdea(idea: string): Promise<ClassificationResult> {
-  const anthropic = await getClient();
-  const config = vscode.workspace.getConfiguration("vizier");
-  const model = config.get<string>("preferredModel", "claude-sonnet-4-20250514");
-
-  const response = await anthropic.messages.create({
-    model: model,
-    max_tokens: 300,
-    system: getClassificationSystemPrompt(),
-    messages: [
-      {
-        role: "user",
-        content: idea
-      }
-    ]
-  });
-
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const text = response.text;
   try {
     const parsed = parseAndValidate(text, "classification");
-    const validCategories: ProjectCategory[] = ["saas", "mobile", "cli_tool", "browser_ext", "game", "internal_tool"];
+    const validCategories: ProjectCategory[] = [
+      "saas",
+      "mobile",
+      "cli_tool",
+      "browser_ext",
+      "game",
+      "internal_tool"
+    ];
     if (!validCategories.includes(parsed.category as ProjectCategory)) {
       throw new Error("Invalid category: " + parsed.category);
     }

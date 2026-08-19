@@ -2,22 +2,34 @@
   "name": "vizier",
   "displayName": "Vizier",
   "description": "Turn app ideas into structured, agent-ready build plans",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "publisher": "cyberelias",
   "license": "MIT",
-  "icon": "icon.png",
+  "icon": "vizier-icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vizier-dev/vizier"
+    "url": "https://github.com/CyberElias-TechPros/vizier"
   },
   "bugs": {
-    "url": "https://github.com/vizier-dev/vizier/issues"
+    "url": "https://github.com/CyberElias-TechPros/vizier/issues"
   },
-  "homepage": "https://github.com/vizier-dev/vizier#readme",
+  "homepage": "https://github.com/CyberElias-TechPros/vizier#readme",
   "galleryBanner": {
     "color": "#1f2a44",
     "theme": "dark"
   },
+  "badges": [
+    {
+      "url": "https://img.shields.io/badge/License-MIT-green.svg",
+      "href": "https://github.com/CyberElias-TechPros/vizier/blob/main/LICENSE.md",
+      "description": "MIT License"
+    },
+    {
+      "url": "https://img.shields.io/badge/VS%20Code-1.85.0+-blue.svg",
+      "href": "https://marketplace.visualstudio.com/search?term=vizier",
+      "description": "Requires VS Code 1.85.0 or higher"
+    }
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -26,14 +38,21 @@
     "Snippets"
   ],
   "keywords": [
-    "ai planning",
+    "ai-planning",
     "planning",
-    "AI",
+    "ai",
     "specification",
     "cursor",
-    "claude"
+    "claude",
+    "prd",
+    "blueprint",
+    "architecture",
+    "tasks",
+    "agent",
+    "documentation"
   ],
   "activationEvents": [
+    "onView:vizier.sidebar",
     "onCommand:vizier.planNewApp",
     "onCommand:vizier.openSidebar",
     "onCommand:vizier.exportPlan"
@@ -49,7 +68,7 @@
       },
       {
         "command": "vizier.openSidebar",
-        "title": "Open Planner Sidebar",
+        "title": "Open Vizier Sidebar",
         "category": "Vizier",
         "icon": "$(layout-sidebar-left)"
       },
@@ -58,6 +77,12 @@
         "title": "Export Plan to Files",
         "category": "Vizier",
         "icon": "$(export)"
+      },
+      {
+        "command": "vizier.checkPlanProgress",
+        "title": "Check Plan Progress",
+        "category": "Vizier",
+        "icon": "$(checklist)"
       }
     ],
     "viewsContainers": {
@@ -74,7 +99,7 @@
         {
           "type": "webview",
           "id": "vizier.sidebar",
-          "name": "Planner",
+          "name": "Vizier",
           "icon": "$(rocket)"
         }
       ]
@@ -82,6 +107,17 @@
     "configuration": {
       "title": "Vizier",
       "properties": {
+        "vizier.provider": {
+          "type": "string",
+          "default": "anthropic",
+          "enum": [
+            "anthropic",
+            "openai",
+            "omniroute",
+            "ollama"
+          ],
+          "description": "LLM provider. 'anthropic' uses Claude; 'openai' uses any OpenAI-compatible API; 'omniroute' uses an OpenAI-compatible gateway that can auto-route/switch models (automode) while Vizier retains all context; 'ollama' uses a local Ollama server (no API key, fully on-prem)."
+        },
         "vizier.anthropicApiKey": {
           "type": "string",
           "default": "",
@@ -94,7 +130,193 @@
             "claude-sonnet-4-20250514",
             "claude-3-5-sonnet-20241022"
           ],
-          "description": "Which Claude model to use"
+          "description": "Which Claude model to use (when provider = anthropic)"
+        },
+        "vizier.ollamaBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Base URL of your local Ollama server (when provider = ollama). No API key is required; runs fully on-prem."
+        },
+        "vizier.ollamaModel": {
+          "type": "string",
+          "default": "llama3.2",
+          "description": "Model id pulled locally in Ollama (when provider = ollama), e.g. llama3.2, qwen2.5-coder:7b, deepseek-r1:8b."
+        },
+        "vizier.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for the OpenAI-compatible provider"
+        },
+        "vizier.openaiBaseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "Base URL for the OpenAI-compatible API (e.g. https://api.openai.com/v1 or an OpenRouter/omniroute endpoint)"
+        },
+        "vizier.openaiModel": {
+          "type": "string",
+          "default": "gpt-4o",
+          "description": "Model id for the OpenAI-compatible provider"
+        },
+        "vizier.omnirouteApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for the omniroute (OpenAI-compatible) gateway"
+        },
+        "vizier.omnirouteBaseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "Base URL for the omniroute gateway (set to your omniroute OpenAI-compatible endpoint)"
+        },
+        "vizier.omnirouteModel": {
+          "type": "string",
+          "default": "auto",
+          "description": "Model for omniroute; 'auto' lets the gateway switch models (automode) while Vizier keeps context"
+        },
+        "vizier.planMonitorNarrative": {
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, the plan-progress report includes an AI-written narrative. This is generated from plan metadata ONLY (task ids, titles, status counts) — never from your source code."
+        },
+        "vizier.planMonitorOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run a lightweight local scan on startup to populate the status-bar progress indicator when a plan exists."
+        },
+        "vizier.codePrivacyMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Privacy guarantee: when true (default), Vizier never transmits repository source code to any LLM. Plan-progress monitoring is always local-only regardless of this setting."
+        },
+        "vizier.fallbackProvider": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "",
+          "enum": [
+            "",
+            "anthropic",
+            "openai",
+            "omniroute"
+          ],
+          "description": "Optional secondary provider used automatically if the primary fails (circuit-breaker / failover). Leave empty to disable."
+        },
+        "vizier.enableCache": {
+          "type": "boolean",
+          "default": true,
+          "description": "Cache identical LLM requests (hashed) to a local temp dir to reduce cost and latency and improve reproducibility."
+        },
+        "vizier.stableMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Force temperature to 0 for reproducible, deterministic plan generation."
+        },
+        "vizier.stageModels": {
+          "type": "object",
+          "default": {},
+          "description": "Per-stage model overrides, e.g. { \"classification\": \"gpt-4o-mini\", \"prd\": \"claude-opus-4-...\" }. Right-sizes models per pipeline stage to cut cost/latency."
+        },
+        "vizier.monthlyBudgetTokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Soft monthly token budget (0 = unlimited). Generation throws BUDGET_EXCEEDED once the running total is reached. Tracked in VS Code global state."
+        },
+        "vizier.verifyPlanWithGit": {
+          "type": "boolean",
+          "default": true,
+          "description": "When checking plan progress, inspect git history for commits referencing task ids (local only)."
+        },
+        "vizier.verifyPlanWithTests": {
+          "type": "boolean",
+          "default": true,
+          "description": "When checking plan progress, look for coverage reports and test files associated with expected task files (local only)."
+        },
+        "vizier.autoCommitPlan": {
+          "type": "boolean",
+          "default": false,
+          "description": "After exporting a plan, create a git commit of the plan/ folder (only if the workspace is a git repo). Keeps plans versioned/diffable."
+        },
+        "vizier.planTrackerWebhook": {
+          "type": "string",
+          "default": "",
+          "description": "Deprecated: use vizier.tracker.* instead. When set and vizier.tracker.type is empty, the plan-progress report is POSTed here after each 'Check Plan Progress'."
+        },
+        "vizier.tracker.type": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "webhook",
+            "jira",
+            "linear",
+            "github"
+          ],
+          "description": "Where to sync plan tasks after 'Check Plan Progress'. 'webhook' POSTs the plan JSON; 'jira'/'linear'/'github' create real issues. Leave empty to disable."
+        },
+        "vizier.tracker.dryRun": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, sync builds the issue payloads but does not call the remote API (useful to preview)."
+        },
+        "vizier.tracker.includeDone": {
+          "type": "boolean",
+          "default": true,
+          "description": "When false, tasks already marked 'done' are skipped during sync."
+        },
+        "vizier.tracker.webhookUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Destination URL for tracker.type = 'webhook'."
+        },
+        "vizier.tracker.jiraBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Jira Cloud base URL, e.g. https://your-domain.atlassian.net (tracker.type = 'jira')."
+        },
+        "vizier.tracker.jiraEmail": {
+          "type": "string",
+          "default": "",
+          "description": "Jira account email for Basic auth (tracker.type = 'jira')."
+        },
+        "vizier.tracker.jiraProjectKey": {
+          "type": "string",
+          "default": "",
+          "description": "Jira project key, e.g. PROJ (tracker.type = 'jira')."
+        },
+        "vizier.tracker.jiraToken": {
+          "type": "string",
+          "default": "",
+          "description": "Jira API token. Also read from the 'vizier.tracker.jiraToken' secret if set."
+        },
+        "vizier.tracker.linearToken": {
+          "type": "string",
+          "default": "",
+          "description": "Linear personal API key. Also read from the 'vizier.tracker.linearToken' secret if set."
+        },
+        "vizier.tracker.linearTeamId": {
+          "type": "string",
+          "default": "",
+          "description": "Linear team id (tracker.type = 'linear')."
+        },
+        "vizier.tracker.githubToken": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub personal access token (issues scope). Also read from the 'vizier.tracker.githubToken' secret if set."
+        },
+        "vizier.tracker.githubOwner": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub repo owner (tracker.type = 'github')."
+        },
+        "vizier.tracker.githubRepo": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub repo name without .git (tracker.type = 'github')."
+        },
+        "vizier.requireReviewBeforeExport": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require an explicit 'I have reviewed this plan' acknowledgement in the UI before exporting, as a human-in-the-loop gate."
         }
       }
     }
@@ -109,7 +331,9 @@
     "watch:webview": "node scripts/build-webview.js --watch",
     "watch:all": "npm-run-all --parallel watch:extension watch:webview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
-    "test": "tsx --test test/unit/*.test.ts",
+    "test": "tsx --tsconfig tsconfig.test.json --test \"test/unit/**/*.test.ts\"",
+    "eval": "tsx scripts/eval.ts",
+    "omniroute:dev": "node scripts/omniroute-dev.mjs",
     "package": "vsce package",
     "publish": "vsce publish"
   },

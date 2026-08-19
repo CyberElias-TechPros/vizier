@@ -1,4 +1,4 @@
-﻿# SUPPLEMENT: Error Handling, Retry Logic, LLM Pipeline Stages, and Phase Gates
+# SUPPLEMENT: Error Handling, Retry Logic, LLM Pipeline Stages, and Phase Gates
 
 ## Purpose
 This document fills specific gaps in the main plan-docs: formal error taxonomy, retry algorithm, multi-stage LLM pipeline, webview security, and phase verification checklists.
@@ -60,7 +60,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   INPUT_EMPTY: 'Please describe your app idea before planning.',
   INPUT_TOO_LONG: 'Please keep your idea under 500 characters.',
   INPUT_INVALID_CATEGORY: 'Could not determine the app type. Please pick one manually.',
-  CONFIG_NO_API_KEY: 'Please set your API key in Settings > Vibe Planner > API Key.',
+  CONFIG_NO_API_KEY: 'Please set your API key in Settings > Vizier > API Key.',
   CONFIG_INVALID_API_KEY: 'The API key appears invalid. Please check and re-enter.',
   FILE_WRITE_FAILED: 'Could not write plan files to your workspace. Check permissions.',
   FILE_PERMISSION_DENIED: 'Permission denied. Make sure VS Code can write to this folder.',
@@ -331,7 +331,7 @@ function getWebviewContent(webview: vscode.Webview, nonce: string): string {
         script-src 'nonce-${nonce}';
         img-src ${webview.cspSource} data:;
       ">
-      <title>Vibe Plan</title>
+      <title>Vizier</title>
     </head>
     <body>
       <div id="root"></div>
@@ -374,7 +374,7 @@ Every phase ends with a checklist. Do NOT proceed to the next phase until every 
 - [ ] "Plan New App" command appears in command palette
 - [ ] Clicking "Plan New App" shows information message
 - [ ] Sidebar icon appears in activity bar
-- [ ] Clicking sidebar icon shows webview with "Vibe Planner" header
+- [ ] Clicking sidebar icon shows webview with "Vizier" header
 - [ ] No errors in VS Code Developer Tools console (Help > Toggle Developer Tools)
 ```
 

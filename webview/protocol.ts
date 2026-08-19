@@ -1,6 +1,10 @@
-﻿// Message types for webview <-> extension host communication
+﻿// Message protocol version - increment when making breaking changes
+export const MESSAGE_PROTOCOL_VERSION = "1.0.0";
+
+// Message types for webview <-> extension host communication
 export interface WebviewMessage {
   type: string;
+  protocolVersion?: string;  // Version of this message protocol (for compatibility checking)
   payload?: any;
 }
 
@@ -28,8 +32,47 @@ export interface GenerateBlueprintMessage extends WebviewMessage {
   type: "GENERATE_BLUEPRINT";
 }
 
-export interface GetStateMessage extends WebviewMessage {
-  type: "GET_STATE";
+export interface CheckPlanProgressMessage extends WebviewMessage {
+  type: "CHECK_PLAN_PROGRESS";
+}
+
+export interface StatusReportMessage extends WebviewMessage {
+  type: "STATUS_REPORT";
+  payload: { report: any; markdown: string };
+}
+
+export interface ProgressMessage extends WebviewMessage {
+  type: "PROGRESS";
+  payload: { stage: number; total: number; label: string };
+}
+
+export interface BlueprintReadyMessage extends WebviewMessage {
+  type: "BLUEPRINT_READY";
+  payload: any;
+}
+
+export interface ExportCompleteMessage extends WebviewMessage {
+  type: "EXPORT_COMPLETE";
+  payload: { files: string[] };
+}
+
+export interface GetSettingsMessage extends WebviewMessage {
+  type: "GET_SETTINGS";
+}
+
+export interface UpdateSettingMessage extends WebviewMessage {
+  type: "UPDATE_SETTING";
+  payload: { key: string; value: any };
+}
+
+export interface SettingsMessage extends WebviewMessage {
+  type: "SETTINGS";
+  payload: { requireReviewBeforeExport: boolean };
+}
+
+export interface SettingsStateMessage extends WebviewMessage {
+  type: "SETTINGS_STATE";
+  payload: { settings: Record<string, any>; definitions: any[] };
 }
 
 // Host to Webview
@@ -51,11 +94,6 @@ export interface QuestionnaireCompleteMessage extends WebviewMessage {
 export interface ErrorMessage extends WebviewMessage {
   type: "ERROR";
   payload: { code: string; message: string };
-}
-
-export interface StateUpdateMessage extends WebviewMessage {
-  type: "STATE_UPDATE";
-  payload: { view: string; data: any };
 }
 
 // Get the VS Code API

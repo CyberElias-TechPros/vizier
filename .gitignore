@@ -7,3 +7,7 @@ dist/
 webview.js
 webview.js.map
 _setup.js
+.vizier/cache/
+.vizier/monitor/
+.vizier/diagnostics/
+

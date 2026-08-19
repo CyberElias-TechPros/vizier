@@ -38,6 +38,7 @@ export interface Project {
   rules: Rule[];
   context_packs: ContextPack[];
   perspectives?: Record<string, Perspective>;
+  roadmap?: Roadmap;
   repo_context: RepoContext | null;
 }
 
@@ -139,6 +140,54 @@ export interface Architecture {
     storage: string;
     infrastructure: string;
   };
+  connections?: ArchitectureConnections;
+}
+
+export interface ArchitectureConnectionModule {
+  name: string;
+  kind: string;
+  purpose: string;
+  files?: string[];
+}
+
+export interface ArchitectureDataFlow {
+  from: string;
+  to: string;
+  what: string;
+  mechanism: string;
+}
+
+export interface ArchitectureCrossLink {
+  source: string;
+  target: string;
+  relationship: string;
+}
+
+export interface ArchitectureConnections {
+  modules?: ArchitectureConnectionModule[];
+  data_flow?: ArchitectureDataFlow[];
+  cross_links?: ArchitectureCrossLink[];
+}
+
+export type RoadmapPhase = "foundation" | "core" | "integration" | "polish" | "production";
+
+export interface RoadmapItem {
+  id: string;
+  title: string;
+  phase: RoadmapPhase;
+  what: string;
+  where: string;
+  target: string;
+  why: string;
+  best_practices: string;
+  verification: string;
+  depends_on: string[];
+  effort: "small" | "medium" | "large" | "xl";
+}
+
+export interface Roadmap {
+  overview: string;
+  items: RoadmapItem[];
 }
 
 export interface Entity {

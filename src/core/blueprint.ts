@@ -1,26 +1,10 @@
-﻿import * as vscode from "vscode";
-import Anthropic from "@anthropic-ai/sdk";
-import { Project, Product, Architecture, Entity, Task, Decision, Rule, Requirement, ApiContract, RepoContext, Perspective } from "../types/pim";
-import { PRD_PROMPT, ARCHITECTURE_PROMPT, SCHEMA_PROMPT, API_CONTRACT_PROMPT, TASKS_PROMPT, DECISIONS_PROMPT } from "../llm/prompts";
+﻿import { Project, Product, Architecture, Entity, Task, Decision, Rule, Requirement, ApiContract, RepoContext, Perspective, Roadmap } from "../types/pim";
+import { PRD_PROMPT, ARCHITECTURE_PROMPT, SCHEMA_PROMPT, API_CONTRACT_PROMPT, TASKS_PROMPT, ROADMAP_PROMPT, DECISIONS_PROMPT } from "../llm/prompts";
 import { parseAndValidate, ValidationError, ValidationStage } from "../llm/schemas";
 import { augmentWithTestingTasks } from "./taskAugment";
 import { parseSelectedPerspectives, getLens, PerspectiveContext } from "./perspectives";
-
-let client: Anthropic | null = null;
-
-async function getClient(): Promise<Anthropic> {
-  if (client) return client;
-  const config = vscode.workspace.getConfiguration("vizier");
-  const apiKey = config.get<string>("anthropicApiKey");
-  if (!apiKey) throw new Error("CONFIG_NO_API_KEY");
-  client = new Anthropic({ apiKey });
-  return client;
-}
-
-function getModel(): string {
-  const config = vscode.workspace.getConfiguration("vizier");
-  return config.get<string>("preferredModel", "claude-sonnet-4-20250514");
-}
+import { ModelProvider } from "../llm/types";
+import { getProvider, getEffectiveModel, getEffectiveTemperature, complete } from "../llm/provider";
 
 export async function generateBlueprint(
   idea: string,
@@ -29,17 +13,18 @@ export async function generateBlueprint(
   onProgress: (stage: number, total: number, label: string) => void,
   repoContext?: RepoContext | null,
   signal?: AbortSignal,
-  onUsage?: (usage: { input: number; output: number }) => void
+  onUsage?: (usage: { input: number; output: number }) => void,
+  provider?: ModelProvider
 ): Promise<Project> {
   const now = new Date().toISOString();
   const perspectiveIds = parseSelectedPerspectives(answers);
-  const TOTAL = 6 + perspectiveIds.length;
+  const TOTAL = 7 + perspectiveIds.length;
 
   let step = 0;
   const advance = (label: string) => onProgress(++step, TOTAL, label);
 
   advance("Generating product requirements...");
-  const prd = await callLLM(PRD_PROMPT, { idea, category, answers, repoContext }, "prd", signal, onUsage);
+  const prd = await callLLM(PRD_PROMPT, { idea, category, answers, repoContext }, "prd", signal, onUsage, provider);
   const product: Product = {
     vision: prd.vision,
     target_audience: prd.target_audience,
@@ -49,7 +34,7 @@ export async function generateBlueprint(
   };
 
   advance("Selecting tech stack...");
-  const arch = await callLLM(ARCHITECTURE_PROMPT, { idea, category, prd, answers, repoContext }, "architecture", signal, onUsage);
+  const arch = await callLLM(ARCHITECTURE_PROMPT, { idea, category, prd, answers, repoContext }, "architecture", signal, onUsage, provider);
   const architecture: Architecture = {
     frontend: arch.frontend,
     backend: arch.backend,
@@ -57,50 +42,83 @@ export async function generateBlueprint(
     auth: arch.auth,
     storage: arch.storage,
     infrastructure: arch.infrastructure,
-    rationale: arch.rationale
+    rationale: arch.rationale,
+    connections: arch.connections
   };
 
   advance("Designing data model...");
-  const schema = await callLLM(SCHEMA_PROMPT, { prd, architecture }, "schema", signal, onUsage);
+  const schema = await callLLM(SCHEMA_PROMPT, { prd, architecture }, "schema", signal, onUsage, provider);
   const entities: Entity[] = schema.entities || [];
 
   advance("Designing API contracts...");
-  const apiResult = await callLLM(API_CONTRACT_PROMPT, { prd, architecture, entities }, "api", signal, onUsage);
+  const apiResult = await callLLM(API_CONTRACT_PROMPT, { prd, architecture, entities }, "api", signal, onUsage, provider);
   const api_contract: ApiContract = {
     endpoints: apiResult.endpoints || [],
     notes: apiResult.notes || ""
   };
 
   advance("Building task graph...");
-  const tasksResult = await callLLM(TASKS_PROMPT, { prd, architecture, entities, api_contract, repoContext }, "tasks", signal, onUsage);
-  const baseTasks: Task[] = (tasksResult.tasks || []).map((t: any) => ({
-    id: t.id,
-    title: t.title,
-    description: t.description,
-    depends_on: t.depends_on || [],
-    status: "not_started" as const,
-    acceptance_criteria: t.acceptance_criteria || [],
-    files_expected: t.files_expected || [],
-    requirement_ids: t.requirement_ids || [],
-    estimated_effort: normalizeEffort(t.estimated_effort),
-    estimated_hours: Number(t.estimated_hours) || 0,
-    story_points: Number(t.story_points) || 0,
-    task_type: "feature" as const
-  }));
+  const tasksResult = await callLLM(TASKS_PROMPT, { prd, architecture, entities, api_contract, repoContext }, "tasks", signal, onUsage, provider);
+  const baseTasks: Task[] = (tasksResult.tasks || [])
+    .filter((t: any) => t && typeof t === "object")
+    .filter((t: any) => t.id && t.title)
+    .map((t: any) => ({
+      id: String(t.id).trim(),
+      title: String(t.title).trim(),
+      description: String(t.description || "").trim(),
+      depends_on: Array.isArray(t.depends_on) ? t.depends_on : [],
+      status: "not_started" as const,
+      acceptance_criteria: Array.isArray(t.acceptance_criteria) ? t.acceptance_criteria : [],
+      files_expected: Array.isArray(t.files_expected) ? t.files_expected : [],
+      requirement_ids: Array.isArray(t.requirement_ids) ? t.requirement_ids : [],
+      estimated_effort: normalizeEffort(t.estimated_effort),
+      estimated_hours: Number(t.estimated_hours) || 0,
+      story_points: Number(t.story_points) || 0,
+      task_type: "feature" as const
+    }));
+
+  if (baseTasks.length === 0) {
+    throw new Error("LLM generated no valid tasks. Response was malformed.");
+  }
 
   const tasks: Task[] = augmentWithTestingTasks(baseTasks, entities, api_contract);
 
+  advance("Building production roadmap...");
+  const roadmapResult = await callLLM(ROADMAP_PROMPT, { prd, architecture, entities, api_contract, tasks }, "roadmap", signal, onUsage, provider);
+  const roadmap: Roadmap = {
+    overview: String(roadmapResult.overview || "").trim(),
+    items: (roadmapResult.items || [])
+      .filter((r: any) => r && typeof r === "object")
+      .filter((r: any) => r.id && r.title)
+      .map((r: any) => ({
+        id: String(r.id).trim(),
+        title: String(r.title).trim(),
+        phase: normalizeRoadmapPhase(r.phase),
+        what: String(r.what || "").trim(),
+        where: String(r.where || "").trim(),
+        target: String(r.target || "").trim(),
+        why: String(r.why || "").trim(),
+        best_practices: Array.isArray(r.best_practices) ? r.best_practices : [],
+        verification: String(r.verification || "").trim(),
+        depends_on: Array.isArray(r.depends_on) ? r.depends_on : [],
+        effort: normalizeEffort(r.effort)
+      }))
+  };
+
   advance("Documenting decisions...");
-  const decisionsResult = await callLLM(DECISIONS_PROMPT, { architecture, entities }, "decisions", signal, onUsage);
-  const decisions: Decision[] = (decisionsResult.decisions || []).map((d: any) => ({
-    id: d.id,
-    topic: d.topic,
-    options: d.options || [],
-    chosen: d.chosen,
-    rationale: d.rationale,
-    impacts: d.impacts || [],
-    status: "approved" as const
-  }));
+  const decisionsResult = await callLLM(DECISIONS_PROMPT, { architecture, entities }, "decisions", signal, onUsage, provider);
+  const decisions: Decision[] = (decisionsResult.decisions || [])
+    .filter((d: any) => d && typeof d === "object")
+    .filter((d: any) => d.id && d.topic)
+    .map((d: any) => ({
+      id: String(d.id).trim(),
+      topic: String(d.topic).trim(),
+      options: Array.isArray(d.options) ? d.options.map((o: any) => String(o)) : [],
+      chosen: String(d.chosen || "").trim(),
+      rationale: String(d.rationale || "").trim(),
+      impacts: Array.isArray(d.impacts) ? d.impacts.map((i: any) => String(i)) : [],
+      status: "approved" as const
+    }));
 
   const perspectives: Record<string, Perspective> = {};
   if (perspectiveIds.length > 0) {
@@ -135,7 +153,7 @@ export async function generateBlueprint(
         temperature: 0.6,
         maxTokens: 1400
       };
-      const res = await callLLM(tpl, ctx, "perspective", signal, onUsage);
+      const res = await callLLM(tpl, ctx, "perspective", signal, onUsage, provider);
       perspectives[id] = {
         roleId: lens.roleId,
         label: lens.label,
@@ -165,6 +183,7 @@ export async function generateBlueprint(
     rules: extractRules(architecture),
     context_packs: [],
     perspectives,
+    roadmap,
     repo_context: repoContext || null
   };
 
@@ -176,10 +195,10 @@ async function callLLM(
   context: any,
   stage: ValidationStage,
   signal?: AbortSignal,
-  onUsage?: (usage: { input: number; output: number }) => void
+  onUsage?: (usage: { input: number; output: number }) => void,
+  provider?: ModelProvider
 ): Promise<any> {
-  const anthropic = await getClient();
-  const model = getModel();
+  const p = provider || (await getProvider());
 
   let lastText = "";
   let lastError: ValidationError | null = null;
@@ -195,22 +214,20 @@ async function callLLM(
     }
 
     try {
-      const response = await anthropic.messages.create(
-        {
-          model,
-          max_tokens: prompt.maxTokens,
-          temperature: prompt.temperature,
-          system: prompt.system,
-          messages
-        },
-        signal ? { signal } : undefined
-      );
+      const response = await complete({
+        system: prompt.system,
+        messages,
+        temperature: getEffectiveTemperature(prompt.temperature),
+        maxTokens: prompt.maxTokens,
+        signal,
+        model: getEffectiveModel(stage)
+      }, p);
 
-      const text = response.content[0].type === "text" ? response.content[0].text : "";
+      const text = response.text;
       lastText = text;
 
       if (onUsage && response.usage) {
-        onUsage({ input: response.usage.input_tokens, output: response.usage.output_tokens });
+        onUsage({ input: response.usage.input, output: response.usage.output });
       }
 
       // Validation errors are caught and retried with feedback
@@ -240,6 +257,17 @@ function normalizeEffort(value: any): string {
   if (v.startsWith("l")) return "large";
   if (v.startsWith("x")) return "xl";
   return "medium";
+}
+
+function normalizeRoadmapPhase(value: any): Roadmap["items"][number]["phase"] {
+  const v = String(value || "").toLowerCase();
+  if (["foundation", "core", "integration", "polish", "production"].includes(v)) return v as any;
+  if (v.startsWith("found")) return "foundation";
+  if (v.startsWith("core")) return "core";
+  if (v.startsWith("integ")) return "integration";
+  if (v.startsWith("pol")) return "polish";
+  if (v.startsWith("prod")) return "production";
+  return "core";
 }
 
 function generateId(): string {

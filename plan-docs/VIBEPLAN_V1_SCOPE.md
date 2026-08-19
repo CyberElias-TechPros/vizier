@@ -1,16 +1,16 @@
-﻿# VIBE PLAN — Final V1 Scope Document
+# VIZIER — Final V1 Scope Document
 
 ## Product Name
-**Vibe Plan** — The planning layer for AI-powered development.
+**Vizier** — The planning layer for AI-powered development.
 
 ## One-Line Pitch
 A VS Code extension that turns a loose idea (or an existing codebase) into a structured, agent-ready build plan — works with any AI model, from the strongest to the weakest.
 
 ## Product Positioning
-Vibe Plan is not a "spec generator." It is the **intelligence and control layer** sitting between humans, AI coding agents, and the software project itself.
+Vizier is not a "spec generator." It is the **intelligence and control layer** sitting between humans, AI coding agents, and the software project itself.
 
 - Cursor, Claude Code, Windsurf can write code.
-- Vibe Plan tells them **what to build, in what order, with what constraints.**
+- Vizier tells them **what to build, in what order, with what constraints.**
 
 We do not compete with AI coding agents. We make them dramatically more effective.
 
@@ -29,7 +29,7 @@ We do not compete with AI coding agents. We make them dramatically more effectiv
 
 ### Three Wedge Features
 
-These are the features strong enough to be the sole reason a user adopts Vibe Plan.
+These are the features strong enough to be the sole reason a user adopts Vizier.
 
 #### Wedge 1: Category-Aware Questionnaire
 - Not a generic form. Not freeform chat.
