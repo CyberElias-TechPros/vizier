@@ -60,7 +60,9 @@
     "onCommand:vizier.startMcp",
     "onCommand:vizier.stopMcp",
     "onCommand:vizier.showDashboard",
-    "onCommand:vizier.symbolInfo"
+    "onCommand:vizier.symbolInfo",
+    "onCommand:vizier.checkPlanProgress",
+    "onCommand:vizier.syncPlan"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -177,6 +179,12 @@
         "command": "vizier.statusBarMenu",
         "title": "Vizier Status Bar Menu",
         "category": "Vizier"
+      },
+      {
+        "command": "vizier.syncPlan",
+        "title": "Sync Plan to External Tracker",
+        "category": "Vizier",
+        "icon": "$(sync)"
       }
     ],
     "viewsContainers": {

@@ -57,6 +57,12 @@ import { registerMcpConnections } from "./ui/sidebar/mcp-connections";
 import { showDashboard, DashboardServices } from "./ui/dashboard";
 import { queryAll, run } from "./core/memory/database";
 
+// --- Plan-progress monitor + tracker sync ---------------------------------
+import { analyzePlanStatus, renderStatusReportMarkdown, generateStatusNarrative, loadPlan } from "./monitor";
+import { syncTasksToTracker, TrackerConfig, TrackerType } from "./tracking/tracker";
+import { getProvider } from "./llm/provider";
+import { execFileSync } from "child_process";
+
 let questionnaireState: QuestionnaireState | null = null;
 let currentIdea: string = "";
 let currentProject: any = null;
@@ -414,8 +420,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // --- Phase 4: sidebar tree views + commands + dashboard ---------------
-  const memoryBrowser = registerMemoryBrowser(context);
-  context.subscriptions.push({ dispose: () => memoryBrowser.refresh() });
+  registerMemoryBrowser(context);
   registerAstExplorer(context);
   registerMcpConnections(context, () => mcpBridge?.sessions ?? null);
 
@@ -427,6 +432,164 @@ export async function activate(context: vscode.ExtensionContext) {
     parsedFileCount: () => astGraph?.symbols.size ?? 0
   };
   registerPhase4Commands(context, controller);
+
+  // --- Plan-progress monitor + tracker sync (v0.1.7 features, re-wired) --
+  const checkPlanProgressCmd = vscode.commands.registerCommand("vizier.checkPlanProgress", async () => {
+    await runPlanProgressCheck(true);
+  });
+
+  const syncPlanCmd = vscode.commands.registerCommand("vizier.syncPlan", async () => {
+    await runPlanTrackerSync();
+  });
+
+  context.subscriptions.push(checkPlanProgressCmd, syncPlanCmd);
+
+  // Honor vizier.planMonitorOnStartup: lightweight local scan, non-blocking.
+  if (vscode.workspace.getConfiguration("vizier").get<boolean>("planMonitorOnStartup", false)) {
+    void runPlanProgressCheck(false);
+  }
+}
+
+/**
+ * Analyze the exported plan's progress in the workspace and surface a
+ * markdown report (plan/status.md + editor preview). Fully local unless an
+ * AI narrative is explicitly enabled (vizier.planMonitorNarrative).
+ */
+async function runPlanProgressCheck(openPreview: boolean): Promise<void> {
+  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!workspacePath) {
+    vscode.window.showWarningMessage("Open a workspace folder first.");
+    return;
+  }
+
+  const config = vscode.workspace.getConfiguration("vizier");
+  const report = analyzePlanStatus(workspacePath, {
+    verifyWithGit: config.get<boolean>("verifyPlanWithGit", true),
+    verifyWithTests: config.get<boolean>("verifyPlanWithTests", true),
+    persistHistory: true
+  });
+
+  vizierStatusBar?.update({ planProgress: report.progressPercent });
+
+  let md = renderStatusReportMarkdown(report);
+
+  const statusPath = path.join(workspacePath, "plan", "status.md");
+  try {
+    fs.mkdirSync(path.dirname(statusPath), { recursive: true });
+    fs.writeFileSync(statusPath, md, "utf8");
+  } catch (err) {
+    console.error("[Vizier] Failed to write plan/status.md:", err);
+  }
+
+  if (config.get<boolean>("planMonitorNarrative", false) && report.total > 0) {
+    try {
+      const provider = await getProvider();
+      const narrative = await generateStatusNarrative(report, provider);
+      if (narrative) md += `\n\n---\n\n## AI Status Narrative\n\n${narrative}\n`;
+    } catch {
+      // No provider configured (or offline) — the local report is enough.
+    }
+  }
+
+  // Deprecated fallback (vizier.planTrackerWebhook): POST the report when no
+  // tracker type is configured yet.
+  if (!config.get<string>("tracker.type", "") && report.total > 0) {
+    const webhookUrl = config.get<string>("planTrackerWebhook", "");
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(report)
+        });
+      } catch (err) {
+        console.error("[Vizier] planTrackerWebhook POST failed:", err);
+      }
+    }
+  }
+
+  if (openPreview) {
+    const doc = await vscode.workspace.openTextDocument({ content: md, language: "markdown" });
+    await vscode.window.showTextDocument(doc, { preview: true });
+  }
+}
+
+/**
+ * Sync plan tasks to an external tracker (vizier.tracker.type): webhook,
+ * jira, linear, or github. Config built from vizier.tracker.* settings.
+ */
+async function runPlanTrackerSync(): Promise<void> {
+  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!workspacePath) {
+    vscode.window.showWarningMessage("Open a workspace folder first.");
+    return;
+  }
+
+  const project = loadPlan(workspacePath);
+  if (!project) {
+    vscode.window.showWarningMessage(
+      "No Vizier plan found at plan/plan.json. Generate and export a plan first."
+    );
+    return;
+  }
+
+  const config = vscode.workspace.getConfiguration("vizier");
+  const typeRaw = config.get<string>("tracker.type", "");
+  if (!typeRaw) {
+    vscode.window.showInformationMessage(
+      "Set vizier.tracker.type (webhook | jira | linear | github) before syncing."
+    );
+    return;
+  }
+  const type = typeRaw as TrackerType;
+
+  const trackerConfig: TrackerConfig = {
+    type,
+    dryRun: config.get<boolean>("tracker.dryRun", false),
+    includeDone: config.get<boolean>("tracker.includeDone", true),
+    webhookUrl: config.get<string>("tracker.webhookUrl", ""),
+    jira: type === "jira"
+      ? {
+          baseUrl: config.get<string>("tracker.jiraBaseUrl", ""),
+          email: config.get<string>("tracker.jiraEmail", ""),
+          token: config.get<string>("tracker.jiraToken", ""),
+          projectKey: config.get<string>("tracker.jiraProjectKey", "")
+        }
+      : undefined,
+    linear: type === "linear"
+      ? {
+          token: config.get<string>("tracker.linearToken", ""),
+          teamId: config.get<string>("tracker.linearTeamId", "")
+        }
+      : undefined,
+    github: type === "github"
+      ? {
+          token: config.get<string>("tracker.githubToken", ""),
+          owner: config.get<string>("tracker.githubOwner", ""),
+          repo: config.get<string>("tracker.githubRepo", "")
+        }
+      : undefined
+  };
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `Vizier: Syncing ${project.tasks.length} task(s) to ${type}...` },
+    async () => {
+      try {
+        const res = await syncTasksToTracker(project, trackerConfig);
+        if (res.errors.length > 0) {
+          vscode.window.showErrorMessage(
+            `Vizier tracker sync: ${res.created.length} created, ${res.skipped} skipped, ${res.errors.length} error(s) — ${res.errors[0]}`
+          );
+        } else {
+          vscode.window.showInformationMessage(
+            `Vizier tracker sync complete: ${res.created.length} created, ${res.skipped} skipped.`
+          );
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Vizier tracker sync failed: ${extractErrorMessage(err)}`);
+      }
+    }
+  );
 }
 
 /**
@@ -751,6 +914,23 @@ async function handleExportPlan(provider: VizierViewProvider) {
         type: "EXPORT_COMPLETE",
         payload: { files: result.filesWritten }
       });
+
+      // Honor vizier.autoCommitPlan: version the plan/ folder in git.
+      if (vscode.workspace.getConfiguration("vizier").get<boolean>("autoCommitPlan", false)) {
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (workspacePath) {
+          try {
+            execFileSync("git", ["-C", workspacePath, "add", "plan"], { stdio: "ignore" });
+            execFileSync(
+              "git",
+              ["-C", workspacePath, "commit", "-m", `vizier: plan for ${currentProject?.name ?? "app"}`],
+              { stdio: "ignore" }
+            );
+          } catch {
+            // Not a git repo or nothing to commit — non-fatal.
+          }
+        }
+      }
     } else {
       logError(
         { message: result.errors.join(", ") },

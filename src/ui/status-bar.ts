@@ -17,6 +17,7 @@ export interface VizierStatusState {
   mcp: "offline" | "running" | "error";
   parsedFiles?: number;
   mcpPort?: number;
+  planProgress?: number;
 }
 
 export class VizierStatusBar {
@@ -97,10 +98,14 @@ export class VizierStatusBar {
     } else if (mcp !== "offline") {
       parts.push(`${mcpIcon} mcp`);
     }
+    if (typeof this.state.planProgress === "number") {
+      parts.push(`$(check-all) ${this.state.planProgress}%`);
+    }
 
     this.item.text = `Vizier ${parts.join("  ")}`;
     this.item.tooltip =
-      `Memory: ${memory} | AST: ${ast} (${this.state.parsedFiles ?? 0} file(s)) | MCP: ${mcp}\n` +
-      "Click to open the Vizier dashboard.";
+      `Memory: ${memory} | AST: ${ast} (${this.state.parsedFiles ?? 0} file(s)) | MCP: ${mcp}` +
+      (typeof this.state.planProgress === "number" ? ` | Plan progress: ${this.state.planProgress}%` : "") +
+      "\nClick to open the Vizier dashboard.";
   }
 }
